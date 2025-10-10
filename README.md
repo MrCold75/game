@@ -1,53 +1,87 @@
-# 🥊 Jump Ultimate Stars - Fighting Game avec Animations Multi-Frames
+# 🥊 Jump Ultimate Stars - Fighting Game COMPLET ✅
 
-Un jeu de combat 2D inspiré de Jump Ultimate Stars, développé en HTML5 Canvas et JavaScript, avec un système d'animations multi-frames révolutionnaire.
+Un jeu de combat 2D inspiré de Jump Ultimate Stars, développé en HTML5 Canvas et JavaScript, avec un système d'animations multi-frames et techniques spéciales cinématiques.
 
-## 🎬 Nouveauté : Animations Multi-Frames !
+## 🚀 **STATUT : TERMINÉ ET FONCTIONNEL** ✅
 
-### ✨ Système d'Animation Révolutionnaire
-- **20 sprites ninja** avec animations fluides
-- **5 types d'animations** : idle, walk, jump, attack, hurt
-- **Traitement automatique** des sprites avec suppression de background
-- **Transitions naturelles** entre les états d'animation
+### ✨ Version Finale avec Sprites Corrigés
+- **✅ SPRITES FONCTIONNELS** : Préchargement intelligent résolu
+- **⚡ TECHNIQUES SPÉCIALES** : Système cinématique 6 phases
+- **🎯 PROJECTILES HADOKEN** : Avec effets de ralenti  
+- **🔧 FALLBACK ROBUSTE** : Gestion d'erreurs complète
+- **📁 STRUCTURE ORGANISÉE** : assets/characters/ + skills/
 
-## 🎮 Aperçu du Jeu
+## 🎮 **LANCER LE JEU**
 
-Jump Ultimate Stars est un jeu de combat 2D en temps réel où deux joueurs s'affrontent avec des personnages entièrement animés. Chaque mouvement est maintenant fluide grâce aux animations multi-frames !
+### 🏆 Version Finale Recommandée :
+```bash
+# Ouvrir sprites_fixed.html dans le navigateur
+Start-Process "sprites_fixed.html"
+```
 
-## ✨ Fonctionnalités
+### 🎯 Contrôles de Combat :
+- **Joueur 1** : `WASD` + `G` (attaque) + **`Shift+G`** (Technique Spéciale)
+- **Joueur 2** : `↑↓←→` + `L` (attaque) + **`Shift+L`** (Technique Spéciale)
+- **`R`** : Redémarrer | **`P`** : Pause
 
-- **Personnages Animés** :
-  - 🥷 **Ninja** : 20 sprites d'animation (idle-4, walk-6, jump-4, attack-4, hurt-2)
-  - ⚔️ **Guerrier** : En cours de conversion vers multi-frames
-  - 🔮 **Mage** : Attaques à distance magiques
-  - 🤖 **Robot** : Équilibré avec bouclier électrique
+### ⚡ Techniques Spéciales Cinématiques :
+1. **Phase 1-3** : Concentration et accumulation d'énergie
+2. **Phase 4** : 🚀 **LANCEMENT HADOKEN** avec ralenti
+3. **Phase 5-6** : Récupération
 
-- **Mécaniques de Combat Animées** :
-  - Système de vie et de défense avec feedback visuel
-  - Attaques normales et spéciales synchronisées aux animations
-  - Double saut et physics réalistes avec animations fluides
-  - Système d'invulnérabilité après dégâts
+## ✨ **SYSTÈME COMPLET RÉALISÉ**
 
-- **Fonctionnalités Avancées** :
-  - Support manettes de jeu
-  - Système de particules et effets visuels
-  - Interface utilisateur réactive
-  - Mode plein écran
-  - Système de pause
+### 🎯 **Personnages avec Sprites Corrigés** :
+- 🥷 **Ninja Blue/Red** : 20+ sprites animés (idle, walk, jump, attack, hurt)
+- ⚡ **6 Sprites Spéciaux** : Techniques cinématiques dans `/skills/`
+- 🔮 **Mage, Guerrier, Robot** : Personnages additionnels
+- 🎨 **Auto-optimisation** : Suppression background, redimensionnement
 
-## 🎯 Comment Jouer
+### 🚀 **Mécaniques Avancées Implémentées** :
+- **Projectiles Hadoken** : Physique réaliste avec collision
+- **Système de Ralenti** : Time-scale 0.3x pendant techniques
+- **Animations Cinématiques** : 6 phases temporisées précisément  
+- **Préchargement Sprites** : Plus de problème de chargement
+- **Fallback Intelligent** : Gère les sprites manquants
+- **Effets Visuels** : Particules, lueurs, auras d'énergie
 
-### Contrôles
+### 🔧 **Pipeline de Développement** :
+- **Python PIL/Numpy** : Traitement automatique d'images
+- **JavaScript ES6+** : Architecture classes modulaire
+- **HTML5 Canvas** : Rendu 60fps optimisé
+- **Git Repository** : Historique complet commité
 
-**Joueur 1 (Clavier)** :
-- Déplacement : `W` `A` `S` `D`
-- Attaque : `F`
-- Défense : `G`
-- Mouvement Spécial : `R`
+## 📁 **VERSIONS DISPONIBLES**
 
-**Joueur 2 (Clavier)** :
-- Déplacement : Flèches directionnelles
-- Attaque : `Numpad 1`
+### � **sprites_fixed.html** ⭐ *RECOMMANDÉ*
+- **Sprites préchargés** correctement
+- **Système de fallback** robuste
+- **Performance optimale** 60fps
+- **Toutes les fonctionnalités** actives
+
+### 🎬 **cinematic.html** 
+- Version avec effets cinématiques avancés
+- Système temporel complexe
+- Pour les démonstrations visuelles
+
+### 🧪 **test_simple.html**
+- Version debug avec rectangles colorés
+- Test de mécaniques sans sprites
+- Validation du moteur de jeu
+
+## 🔧 **OUTILS DE MAINTENANCE**
+
+### 🐍 Scripts Python Automatiques :
+```bash
+# Détecter et configurer automatiquement
+python auto_adjust_sprites.py
+
+# Nettoyer et optimiser les sprites  
+python clean_sprites_advanced.py
+
+# Vérifier l'état des animations
+python check_animations.py
+```
 - Défense : `Numpad 2`
 - Mouvement Spécial : `Numpad 3`
 

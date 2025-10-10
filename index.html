@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jump Ultimate Stars</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="1200" height="800"></canvas>
+        <div id="ui">
+            <div id="healthBars">
+                <div class="health-bar" id="player1Health">
+                    <div class="health-fill"></div>
+                    <span>Joueur 1</span>
+                </div>
+                <div class="health-bar" id="player2Health">
+                    <div class="health-fill"></div>
+                    <span>Joueur 2</span>
+                </div>
+            </div>
+            <div id="gameInfo">
+                <div id="timer">99</div>
+                <div id="score">
+                    <span id="p1Score">0</span> - <span id="p2Score">0</span>
+                </div>
+            </div>
+        </div>
+        <div id="menu" class="screen active">
+            <h1>Jump Ultimate Stars</h1>
+            <div class="menu-buttons">
+                <button onclick="startGame()">Commencer</button>
+                <button onclick="showCharacterSelect()">Sélection Personnage</button>
+                <button onclick="showControls()">Contrôles</button>
+            </div>
+        </div>
+        <div id="characterSelect" class="screen">
+            <h2>Sélectionnez vos personnages</h2>
+            <div class="character-grid">
+                <div class="character-card" data-character="ninja">
+                    <div class="character-preview ninja"></div>
+                    <h3>Ninja</h3>
+                    <p>Rapide et agile</p>
+                </div>
+                <div class="character-card" data-character="warrior">
+                    <div class="character-preview warrior"></div>
+                    <h3>Guerrier</h3>
+                    <p>Fort et résistant</p>
+                </div>
+                <div class="character-card" data-character="mage">
+                    <div class="character-preview mage"></div>
+                    <h3>Mage</h3>
+                    <p>Attaques à distance</p>
+                </div>
+                <div class="character-card" data-character="robot">
+                    <div class="character-preview robot"></div>
+                    <h3>Robot</h3>
+                    <p>Équilibré</p>
+                </div>
+            </div>
+            <button onclick="backToMenu()">Retour</button>
+        </div>
+        <div id="controls" class="screen">
+            <h2>Contrôles</h2>
+            <div class="controls-info">
+                <div class="player-controls">
+                    <h3>Joueur 1</h3>
+                    <p>Déplacer: WASD</p>
+                    <p>Attaque: F</p>
+                    <p>Saut: W</p>
+                    <p>Défense: G</p>
+                </div>
+                <div class="player-controls">
+                    <h3>Joueur 2</h3>
+                    <p>Déplacer: Flèches</p>
+                    <p>Attaque: Numpad 1</p>
+                    <p>Saut: Flèche Haut</p>
+                    <p>Défense: Numpad 2</p>
+                </div>
+            </div>
+            <button onclick="backToMenu()">Retour</button>
+        </div>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script src="js/assets.js"></script>
+    <script src="js/characters.js"></script>
+    <script src="js/physics.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

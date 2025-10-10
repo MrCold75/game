@@ -1,0 +1,314 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    overflow: hidden;
+}
+
+#gameContainer {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#gameCanvas {
+    border: 3px solid #fff;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(180deg, #87CEEB 0%, #98FB98 70%, #8B4513 100%);
+}
+
+#ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+#healthBars {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 50px;
+    width: 600px;
+    justify-content: space-between;
+}
+
+.health-bar {
+    width: 250px;
+    height: 30px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #fff;
+    border-radius: 15px;
+    position: relative;
+    overflow: hidden;
+}
+
+.health-fill {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, #ff6b6b, #ffd93d);
+    transition: width 0.3s ease;
+    border-radius: 13px;
+}
+
+.health-bar span {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-weight: bold;
+    font-size: 12px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+#gameInfo {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+#timer {
+    font-size: 24px;
+    font-weight: bold;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 20px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+}
+
+#score {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    pointer-events: all;
+}
+
+.screen.active {
+    display: flex;
+}
+
+#menu h1 {
+    font-size: 48px;
+    margin-bottom: 50px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4);
+    background-size: 400% 400%;
+    animation: gradientShift 3s ease infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+button {
+    padding: 15px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 200px;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(45deg, #764ba2, #667eea);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+#confirmSelection {
+    background: linear-gradient(45deg, #4ecdc4, #44a08d);
+    margin-top: 20px;
+    font-size: 20px;
+    padding: 20px 40px;
+    display: none;
+}
+
+#confirmSelection:hover {
+    background: linear-gradient(45deg, #44a08d, #4ecdc4);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+#selectionInfo {
+    color: #4ecdc4;
+    font-size: 18px;
+    font-weight: bold;
+    margin: 20px 0;
+    text-align: center;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+#characterSelect h2 {
+    font-size: 36px;
+    margin-bottom: 40px;
+}
+
+.character-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 30px;
+    margin-bottom: 40px;
+}
+
+.character-card {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 15px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 200px;
+}
+
+.character-card:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.character-card.selected {
+    border-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.3);
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(78, 205, 196, 0.6);
+}
+
+.character-preview {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 15px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+}
+
+.character-preview.ninja {
+    background: linear-gradient(45deg, #2c3e50, #34495e);
+}
+
+.character-preview.warrior {
+    background: linear-gradient(45deg, #e74c3c, #c0392b);
+}
+
+.character-preview.mage {
+    background: linear-gradient(45deg, #9b59b6, #8e44ad);
+}
+
+.character-preview.robot {
+    background: linear-gradient(45deg, #34495e, #2c3e50);
+}
+
+.character-card h3 {
+    font-size: 20px;
+    margin-bottom: 10px;
+}
+
+.character-card p {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+#controls h2 {
+    font-size: 36px;
+    margin-bottom: 40px;
+}
+
+.controls-info {
+    display: flex;
+    gap: 100px;
+    margin-bottom: 40px;
+}
+
+.player-controls {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 30px;
+    border-radius: 15px;
+    min-width: 250px;
+}
+
+.player-controls h3 {
+    font-size: 24px;
+    margin-bottom: 20px;
+    color: #4ecdc4;
+}
+
+.player-controls p {
+    font-size: 16px;
+    margin-bottom: 10px;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 768px) {
+    #gameCanvas {
+        width: 95vw;
+        height: 60vh;
+    }
+    
+    .character-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .controls-info {
+        flex-direction: column;
+        gap: 30px;
+    }
+    
+    #healthBars {
+        width: 90%;
+        gap: 20px;
+    }
+    
+    .health-bar {
+        width: 200px;
+    }
+}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Taille Sprites</title>
+    <style>
+        body { background: #333; color: white; font-family: Arial; padding: 20px; }
+        canvas { border: 2px solid #666; background: #87CEEB; }
+        #info { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Test de la Taille Réelle des Sprites</h1>
+    <canvas id="canvas" width="800" height="400"></canvas>
+    <div id="info">
+        <h3>Informations sur les sprites:</h3>
+        <div id="spriteInfo"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const infoDiv = document.getElementById('spriteInfo');
+
+        function addInfo(text) {
+            infoDiv.innerHTML += '<div>' + text + '</div>';
+        }
+
+        async function testSprites() {
+            addInfo('Chargement des sprites...');
+
+            // Charger le sprite ninja_idle
+            const ninjaIdle = new Image();
+            ninjaIdle.onload = () => {
+                const realWidth = ninjaIdle.width;
+                const realHeight = ninjaIdle.height;
+                
+                addInfo(`✅ ninja_idle chargé: ${realWidth}x${realHeight} pixels`);
+                
+                // Dessiner à taille réelle
+                ctx.drawImage(ninjaIdle, 50, 50);
+                addInfo(`📍 Dessiné à taille réelle à (50, 50)`);
+                
+                // Dessiner à 2x la taille
+                ctx.drawImage(ninjaIdle, 50 + realWidth + 20, 50, realWidth * 2, realHeight * 2);
+                addInfo(`📍 Dessiné à 2x la taille à (${50 + realWidth + 20}, 50)`);
+                
+                // Dessiner à 3x la taille
+                ctx.drawImage(ninjaIdle, 50, 50 + realHeight + 20, realWidth * 3, realHeight * 3);
+                addInfo(`📍 Dessiné à 3x la taille à (50, ${50 + realHeight + 20})`);
+                
+                // Ajouter des labels
+                ctx.fillStyle = 'black';
+                ctx.font = '14px Arial';
+                ctx.fillText('Taille réelle', 50, 45);
+                ctx.fillText('2x plus grand', 50 + realWidth + 20, 45);
+                ctx.fillText('3x plus grand', 50, 50 + realHeight + 15);
+            };
+            
+            ninjaIdle.onerror = () => {
+                addInfo('❌ Erreur de chargement ninja_idle');
+            };
+            
+            ninjaIdle.src = './assets/characters/ninja_idle.png';
+        }
+
+        testSprites();
+    </script>
+</body>
+</html>

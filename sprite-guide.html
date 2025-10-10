@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Guide des Sprites - Jump Ultimate Stars</title>
+    <style>
+        body { 
+            background: #2c3e50; 
+            color: white; 
+            font-family: Arial; 
+            padding: 20px; 
+            line-height: 1.6;
+        }
+        .example { 
+            background: #34495e; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 10px; 
+        }
+        .sprite-demo {
+            display: inline-block;
+            margin: 10px;
+            text-align: center;
+            background: #87CEEB;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        canvas {
+            border: 2px solid #fff;
+            background: #87CEEB;
+        }
+        .good { color: #2ecc71; }
+        .bad { color: #e74c3c; }
+        .info { color: #f39c12; }
+        code {
+            background: #1a252f;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🥷 Guide des Sprites pour Jump Ultimate Stars</h1>
+
+    <div class="example">
+        <h2>📏 Tailles Recommandées</h2>
+        <p class="good">✅ <strong>Tailles idéales :</strong></p>
+        <ul>
+            <li><code>64x64 pixels</code> - Parfait pour ce jeu</li>
+            <li><code>128x128 pixels</code> - Plus détaillé</li>
+            <li><code>32x32 pixels</code> - Plus petit mais rapide</li>
+        </ul>
+        <p class="info">⚠️ <strong>Important :</strong> Tous tes sprites doivent avoir la même taille !</p>
+    </div>
+
+    <div class="example">
+        <h2>🎭 Animations Nécessaires</h2>
+        <p>Pour chaque personnage, tu as besoin de <strong>5 sprites</strong> :</p>
+        <ol>
+            <li><code>ninja_idle.png</code> - Position debout, immobile</li>
+            <li><code>ninja_walk.png</code> - En train de marcher</li>
+            <li><code>ninja_jump.png</code> - En l'air, sautant</li>
+            <li><code>ninja_attack.png</code> - En train d'attaquer</li>
+            <li><code>ninja_hurt.png</code> - Quand il prend des dégâts</li>
+        </ol>
+        <p class="info">💡 Plus un sprite <code>ninja_icon.png</code> pour le menu de sélection</p>
+    </div>
+
+    <div class="example">
+        <h2>🎨 Exemples Visuels</h2>
+        <p>Voici des exemples de sprites créés avec du code :</p>
+        
+        <div id="sprite-examples"></div>
+    </div>
+
+    <div class="example">
+        <h2>📋 Format et Qualité</h2>
+        <p class="good">✅ <strong>Bon format :</strong></p>
+        <ul>
+            <li>Format <code>.png</code> (transparence supportée)</li>
+            <li>Fond transparent ou uniforme</li>
+            <li>Contours nets et visibles</li>
+            <li>Couleurs contrastées</li>
+        </ul>
+        
+        <p class="bad">❌ <strong>À éviter :</strong></p>
+        <ul>
+            <li>Images floues ou pixelisées</li>
+            <li>Tailles différentes entre les sprites</li>
+            <li>Format .jpg (pas de transparence)</li>
+            <li>Sprites trop détaillés (illisibles en petit)</li>
+        </ul>
+    </div>
+
+    <div class="example">
+        <h2>🔍 Test de Tes Sprites</h2>
+        <p>Vérifions tes sprites actuels :</p>
+        <div id="user-sprites"></div>
+        <canvas id="testCanvas" width="600" height="200"></canvas>
+    </div>
+
+    <script>
+        // Créer des exemples de sprites
+        function createExampleSprite(name, color, symbol, pose) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            
+            // Corps principal
+            ctx.fillStyle = color;
+            if (pose === 'idle') {
+                ctx.fillRect(20, 20, 24, 40); // Corps droit
+            } else if (pose === 'walk') {
+                ctx.fillRect(18, 20, 24, 40); // Corps légèrement penché
+                ctx.fillRect(10, 50, 8, 12); // Jambe gauche
+                ctx.fillRect(35, 50, 8, 12); // Jambe droite
+            } else if (pose === 'jump') {
+                ctx.fillRect(20, 15, 24, 40); // Corps étiré
+                ctx.fillRect(15, 25, 8, 8); // Bras gauche
+                ctx.fillRect(41, 25, 8, 8); // Bras droit
+            } else if (pose === 'attack') {
+                ctx.fillRect(20, 20, 24, 40); // Corps
+                ctx.fillRect(45, 15, 15, 6); // Arme/bras d'attaque
+            } else if (pose === 'hurt') {
+                ctx.fillRect(22, 25, 20, 35); // Corps penché
+            }
+            
+            // Tête
+            ctx.fillRect(26, 8, 12, 12);
+            
+            // Contour
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(0, 0, 64, 64);
+            
+            // Symbole
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(symbol, 32, 45);
+            
+            return canvas;
+        }
+
+        // Afficher les exemples
+        const examplesDiv = document.getElementById('sprite-examples');
+        const poses = ['idle', 'walk', 'jump', 'attack', 'hurt'];
+        const colors = ['#2c3e50', '#e74c3c', '#9b59b6', '#f39c12', '#c0392b'];
+
+        poses.forEach((pose, index) => {
+            const spriteDemo = document.createElement('div');
+            spriteDemo.className = 'sprite-demo';
+            
+            const canvas = createExampleSprite(pose, colors[index], pose[0].toUpperCase(), pose);
+            const label = document.createElement('div');
+            label.innerHTML = `<strong>${pose}</strong><br>64x64px`;
+            
+            spriteDemo.appendChild(canvas);
+            spriteDemo.appendChild(label);
+            examplesDiv.appendChild(spriteDemo);
+        });
+
+        // Tester les sprites utilisateur
+        async function testUserSprites() {
+            const testCanvas = document.getElementById('testCanvas');
+            const ctx = testCanvas.getContext('2d');
+            const userSpritesDiv = document.getElementById('user-sprites');
+            
+            userSpritesDiv.innerHTML = '<p>🔄 Test de tes sprites en cours...</p>';
+            
+            let x = 10;
+            const sprites = ['ninja_idle', 'ninja_walk', 'ninja_jump', 'ninja_attack', 'ninja_hurt'];
+            
+            for (const spriteName of sprites) {
+                try {
+                    const img = new Image();
+                    await new Promise((resolve, reject) => {
+                        img.onload = () => {
+                            // Dessiner le sprite
+                            ctx.drawImage(img, x, 10, 80, 80);
+                            
+                            // Ajouter le nom
+                            ctx.fillStyle = 'black';
+                            ctx.font = '12px Arial';
+                            ctx.fillText(spriteName, x, 100);
+                            
+                            // Info sur la taille
+                            ctx.fillText(`${img.width}x${img.height}`, x, 115);
+                            
+                            userSpritesDiv.innerHTML += `<div class="good">✅ ${spriteName}: ${img.width}x${img.height}px</div>`;
+                            
+                            x += 100;
+                            resolve();
+                        };
+                        img.onerror = () => {
+                            userSpritesDiv.innerHTML += `<div class="bad">❌ ${spriteName}: Non trouvé</div>`;
+                            reject();
+                        };
+                        img.src = `./assets/characters/${spriteName}.png`;
+                    });
+                } catch (e) {
+                    // Sprite non trouvé, continuer
+                }
+            }
+            
+            userSpritesDiv.innerHTML += '<p class="info">💡 Tes sprites sont affichés ci-dessus à 80x80px pour être bien visibles</p>';
+        }
+
+        // Lancer le test
+        testUserSprites();
+    </script>
+
+    <div class="example">
+        <h2>🛠️ Conseils de Création</h2>
+        <h3>Si tu crées tes sprites :</h3>
+        <ul>
+            <li><strong>Logiciels recommandés :</strong> Aseprite, GIMP, Photoshop, Paint.NET</li>
+            <li><strong>Style :</strong> Pixel art simple et lisible</li>
+            <li><strong>Couleurs :</strong> Palette limitée (3-5 couleurs par sprite)</li>
+            <li><strong>Poses :</strong> Exagère les mouvements pour qu'ils soient visibles</li>
+        </ul>
+        
+        <h3>Si tu utilises des sprites existants :</h3>
+        <ul>
+            <li>Redimensionne-les à la même taille</li>
+            <li>Assure-toi qu'ils ont un style cohérent</li>
+            <li>Vérifie que le fond est transparent</li>
+        </ul>
+    </div>
+
+    <div class="example">
+        <h2>📁 Structure des Fichiers</h2>
+        <p>Tes fichiers doivent être organisés comme ça :</p>
+        <pre><code>assets/
+  characters/
+    ninja_idle.png
+    ninja_walk.png
+    ninja_jump.png
+    ninja_attack.png
+    ninja_hurt.png
+    ninja_icon.png
+    warrior_idle.png
+    warrior_walk.png
+    ...etc</code></pre>
+    </div>
+
+</body>
+</html>

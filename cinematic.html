@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jump Ultimate Stars - Hadoken Cinématique</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        canvas {
+            border: 3px solid #4a90e2;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(74, 144, 226, 0.5);
+        }
+        
+        #controls, #gameInfo, #log {
+            margin: 10px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            border: 1px solid #4a90e2;
+        }
+        
+        #log {
+            width: 400px;
+            height: 150px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        
+        .timing-phase {
+            color: cyan;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="1200" height="800"></canvas>
+        
+        <div id="controls">
+            <strong>Contrôles:</strong><br>
+            Joueur 1 (Ninja): WASD + G (attaque) + <span style="color: cyan; font-weight: bold;">Shift+G (Hadoken Cinématique)</span><br>
+            Joueur 2 (Warrior): ↑↓←→ + L (attaque) + <span style="color: cyan; font-weight: bold;">Shift+L (Hadoken Cinématique)</span><br>
+            R: Redémarrer | P: Pause
+        </div>
+        
+        <div id="gameInfo">
+            <div>Santé P1: <span id="p1Health">100</span>%</div>
+            <div>Santé P2: <span id="p2Health">100</span>%</div>
+            <div>Temps: <span id="gameTimer">99</span>s</div>
+            <div class="timing-phase">Phase Spéciale: <span id="specialPhase">Prêt</span></div>
+        </div>
+        
+        <div id="log">
+            <strong>Log Cinématique:</strong><br>
+            <div id="logContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let gameRunning = true;
+        let keys = {};
+        let players = [];
+        let projectiles = [];
+        let timeScale = 1.0; // Échelle de temps global
+        let gameTimer = 99;
+        
+        // Système de log
+        function log(message) {
+            const logContent = document.getElementById('logContent');
+            const timestamp = new Date().toLocaleTimeString();
+            logContent.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+        
+        // Classe Projectile Hadoken
+        class Projectile {
+            constructor(x, y, direction, owner) {
+                this.x = x;
+                this.y = y;
+                this.width = 30;
+                this.height = 20;
+                this.direction = direction; // 1 ou -1
+                this.speed = 400;
+                this.damage = 40;
+                this.owner = owner;
+                this.timer = 0;
+                this.life = 3000; // 3 secondes
+                this.glowIntensity = 1.0;
+                
+                log(`⚡ Hadoken lancé par ${owner.type} !`);
+            }
+            
+            update(deltaTime) {
+                const dt = deltaTime / 1000;
+                
+                this.x += this.speed * this.direction * dt;
+                this.timer += deltaTime;
+                
+                // Effet de pulsation
+                this.glowIntensity = 0.5 + 0.5 * Math.sin(this.timer * 0.01);
+                
+                // Supprimer si hors écran ou temps écoulé
+                if (this.x < -100 || this.x > 1300 || this.timer > this.life) {
+                    return false; // À supprimer
+                }
+                
+                return true; // Continuer
+            }
+            
+            checkCollision(player) {
+                return this.x < player.x + player.width &&
+                       this.x + this.width > player.x &&
+                       this.y < player.y + player.height &&
+                       this.y + this.height > player.y;
+            }
+            
+            render(ctx) {
+                ctx.save();
+                
+                // Effet de glow
+                ctx.shadowColor = 'cyan';
+                ctx.shadowBlur = 20 * this.glowIntensity;
+                
+                // Corps du projectile
+                ctx.fillStyle = `rgba(0, 255, 255, ${0.8 * this.glowIntensity})`;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Centre lumineux
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.glowIntensity})`;
+                ctx.fillRect(this.x + 5, this.y + 5, this.width - 10, this.height - 10);
+                
+                ctx.restore();
+            }
+        }
+
+        // Classe joueur avec système cinématographique
+        class CinematicPlayer {
+            constructor(x, y, type, isPlayer1) {
+                this.x = x;
+                this.y = y;
+                this.width = 80;
+                this.height = 80;
+                this.type = type;
+                this.isPlayer1 = isPlayer1;
+                this.health = 100;
+                this.maxHealth = 100;
+                this.facingLeft = false;
+                
+                // Animation
+                this.animationState = 'idle';
+                this.animationTimer = 0;
+                this.animationFrame = 1;
+                this.frameSpeed = 500;
+                
+                // Physique
+                this.vx = 0;
+                this.vy = 0;
+                this.onGround = false;
+                this.speed = 300;
+                this.jumpPower = 500;
+                this.gravity = 1500;
+                
+                // Combat
+                this.isAttacking = false;
+                this.attackTimer = 0;
+                this.attackDuration = 1000;
+                this.hasHit = false;
+                
+                // Système cinématographique spécial
+                this.isChargingSpecial = false;
+                this.specialPhase = 0; // 0=repos, 1-3=charge, 4=lancement, 5-6=récupération
+                this.specialTimer = 0;
+                this.specialPhaseDurations = [
+                    0,    // Phase 0 : repos
+                    300,  // Phase 1 : début charge
+                    300,  // Phase 2 : charge intermédiaire  
+                    300,  // Phase 3 : charge maximale
+                    200,  // Phase 4 : lancement projectile + slow motion
+                    250,  // Phase 5 : récupération 1
+                    250   // Phase 6 : récupération 2
+                ];
+                this.specialCooldown = 0;
+                this.specialCooldownDuration = 3000;
+                
+                log(`🎬 ${type} créé avec système cinématographique`);
+            }
+            
+            chargeSpecialAttack() {
+                if (this.specialCooldown <= 0 && !this.isChargingSpecial) {
+                    this.isChargingSpecial = true;
+                    this.specialPhase = 1;
+                    this.specialTimer = 0;
+                    this.animationState = 'special';
+                    this.animationFrame = 1;
+                    
+                    log(`🎬 ${this.type} : Début séquence cinématographique`);
+                    this.updatePhaseDisplay();
+                }
+            }
+            
+            updatePhaseDisplay() {
+                const phaseNames = [
+                    'Prêt', 'Concentration', 'Accumulation', 'Charge Max', 
+                    'LANCEMENT', 'Récupération', 'Fin'
+                ];
+                document.getElementById('specialPhase').textContent = 
+                    `${this.type} - ${phaseNames[this.specialPhase]}`;
+            }
+            
+            executeSpecialAttack() {
+                // Créer le projectile
+                const projectileX = this.facingLeft ? this.x - 30 : this.x + this.width;
+                const projectileY = this.y + this.height / 2 - 10;
+                const direction = this.facingLeft ? -1 : 1;
+                
+                const projectile = new Projectile(projectileX, projectileY, direction, this);
+                projectiles.push(projectile);
+                
+                // Déclencher le slow motion
+                timeScale = 0.3;
+                log(`🎬 SLOW MOTION activé ! Hadoken lancé !`);
+                
+                setTimeout(() => {
+                    timeScale = 1.0;
+                    log(`🎬 Retour à la vitesse normale`);
+                }, 1000);
+            }
+
+            update(deltaTime) {
+                const dt = deltaTime / 1000;
+                const scaledDeltaTime = deltaTime * timeScale;
+                const scaledDt = dt * timeScale;
+                
+                // Cooldown spécial
+                if (this.specialCooldown > 0) {
+                    this.specialCooldown -= deltaTime;
+                }
+                
+                // Gestion système cinématographique
+                if (this.isChargingSpecial) {
+                    this.specialTimer += deltaTime;
+                    
+                    const currentPhaseDuration = this.specialPhaseDurations[this.specialPhase];
+                    
+                    if (this.specialTimer >= currentPhaseDuration) {
+                        this.specialTimer = 0;
+                        this.specialPhase++;
+                        
+                        if (this.specialPhase === 4) {
+                            // Phase 4 : Lancement + Slow Motion
+                            this.executeSpecialAttack();
+                            
+                        } else if (this.specialPhase > 6) {
+                            // Fin de séquence
+                            this.isChargingSpecial = false;
+                            this.specialPhase = 0;
+                            this.specialCooldown = this.specialCooldownDuration;
+                            this.animationState = 'idle';
+                            log(`🎬 ${this.type} : Séquence terminée`);
+                        }
+                        
+                        this.updatePhaseDisplay();
+                        this.animationFrame = this.specialPhase;
+                    }
+                    
+                    // Pas de mouvement pendant la séquence spéciale
+                    return;
+                }
+                
+                // Mouvement normal
+                let isMoving = false;
+                
+                if (this.isPlayer1) {
+                    if (keys['KeyA']) {
+                        this.vx = -this.speed;
+                        this.facingLeft = true;
+                        isMoving = true;
+                    } else if (keys['KeyD']) {
+                        this.vx = this.speed;
+                        this.facingLeft = false;
+                        isMoving = true;
+                    } else {
+                        this.vx = 0;
+                    }
+                    
+                    if (keys['KeyW'] && this.onGround) {
+                        this.vy = -this.jumpPower;
+                        this.onGround = false;
+                    }
+                    
+                    if (keys['KeyG'] && !this.isAttacking) {
+                        this.attack();
+                    }
+                } else {
+                    if (keys['ArrowLeft']) {
+                        this.vx = -this.speed;
+                        this.facingLeft = true;
+                        isMoving = true;
+                    } else if (keys['ArrowRight']) {
+                        this.vx = this.speed;
+                        this.facingLeft = false;
+                        isMoving = true;
+                    } else {
+                        this.vx = 0;
+                    }
+                    
+                    if (keys['ArrowUp'] && this.onGround) {
+                        this.vy = -this.jumpPower;
+                        this.onGround = false;
+                    }
+                    
+                    if (keys['KeyL'] && !this.isAttacking) {
+                        this.attack();
+                    }
+                }
+                
+                // Physique
+                this.vy += this.gravity * scaledDt;
+                this.x += this.vx * scaledDt;
+                this.y += this.vy * scaledDt;
+                
+                // Collision sol
+                if (this.y >= 620) {
+                    this.y = 620;
+                    this.vy = 0;
+                    this.onGround = true;
+                }
+                
+                // Limites écran
+                this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
+                
+                // Gestion des animations
+                this.updateAnimation(scaledDeltaTime, isMoving);
+                
+                // Combat
+                if (this.isAttacking) {
+                    this.attackTimer += scaledDeltaTime;
+                    if (this.attackTimer >= this.attackDuration) {
+                        this.isAttacking = false;
+                        this.attackTimer = 0;
+                        this.hasHit = false;
+                    }
+                }
+            }
+            
+            updateAnimation(deltaTime, isMoving) {
+                let newState;
+                
+                if (this.isChargingSpecial) {
+                    newState = 'special';
+                } else if (this.isAttacking) {
+                    newState = 'attack';
+                } else if (!this.onGround) {
+                    newState = 'jump';
+                } else if (isMoving) {
+                    newState = 'walk';
+                } else {
+                    newState = 'idle';
+                }
+                
+                if (newState !== this.animationState) {
+                    this.animationState = newState;
+                    this.animationFrame = 1;
+                    this.animationTimer = 0;
+                }
+                
+                this.animationTimer += deltaTime;
+                
+                if (this.animationTimer >= this.frameSpeed) {
+                    this.animationTimer = 0;
+                    
+                    if (!this.isChargingSpecial) {
+                        this.animationFrame++;
+                        
+                        const maxFrames = {
+                            'idle': 3,
+                            'walk': 4,
+                            'jump': 2,
+                            'attack': 3,
+                            'hurt': 2,
+                            'special': 6
+                        };
+                        
+                        const maxFrame = maxFrames[this.animationState] || 1;
+                        if (this.animationFrame > maxFrame) {
+                            this.animationFrame = 1;
+                        }
+                    }
+                }
+            }
+            
+            attack() {
+                this.isAttacking = true;
+                this.attackTimer = 0;
+                this.hasHit = false;
+                log(`👊 ${this.type} attaque !`);
+            }
+            
+            takeDamage(amount) {
+                this.health -= amount;
+                this.health = Math.max(0, this.health);
+                this.animationState = 'hurt';
+                this.animationFrame = 1;
+                log(`💔 ${this.type} perd ${amount} HP`);
+            }
+            
+            render(ctx) {
+                // Effet pendant charge spéciale
+                if (this.isChargingSpecial) {
+                    const intensity = 0.3 + 0.4 * (this.specialPhase / 6);
+                    ctx.save();
+                    ctx.shadowColor = 'cyan';
+                    ctx.shadowBlur = 20 * intensity;
+                    ctx.fillStyle = `rgba(0, 255, 255, ${intensity})`;
+                    ctx.fillRect(this.x - 10, this.y - 10, this.width + 20, this.height + 20);
+                    ctx.restore();
+                }
+                
+                // Essayer de charger le sprite
+                let spriteName, spritePath;
+                
+                if (this.animationState === 'special') {
+                    // Sprites spéciaux depuis le dossier skills/
+                    spriteName = `ninja_special${this.animationFrame}.png`;
+                    spritePath = `assets/characters/skills/${spriteName}`;
+                } else {
+                    // Sprites normaux
+                    spriteName = `ninja_${this.animationState}${this.animationFrame}.png`;
+                    spritePath = `assets/characters/${spriteName}`;
+                }
+                
+                const img = new Image();
+                img.src = spritePath;
+                
+                img.onload = () => {
+                    ctx.save();
+                    if (this.facingLeft) {
+                        ctx.scale(-1, 1);
+                        ctx.drawImage(img, -this.x - this.width, this.y, this.width, this.height);
+                    } else {
+                        ctx.drawImage(img, this.x, this.y, this.width, this.height);
+                    }
+                    ctx.restore();
+                };
+                
+                img.onerror = () => {
+                    // Fallback : si sprite spécial introuvable, utiliser sprite d'attaque
+                    if (this.animationState === 'special') {
+                        const fallbackFrame = Math.min(this.animationFrame, 3); // Max 3 frames d'attaque
+                        const fallbackImg = new Image();
+                        fallbackImg.src = `assets/characters/ninja_attack${fallbackFrame}.png`;
+                        
+                        fallbackImg.onload = () => {
+                            ctx.save();
+                            if (this.facingLeft) {
+                                ctx.scale(-1, 1);
+                                ctx.drawImage(fallbackImg, -this.x - this.width, this.y, this.width, this.height);
+                            } else {
+                                ctx.drawImage(fallbackImg, this.x, this.y, this.width, this.height);
+                            }
+                            ctx.restore();
+                        };
+                        
+                        fallbackImg.onerror = () => {
+                            this.renderRectangle(ctx);
+                        };
+                    } else {
+                        this.renderRectangle(ctx);
+                    }
+                };
+                
+                // Barre de vie
+                this.renderHealthBar(ctx);
+                
+                // Indicateur phase spéciale
+                if (this.isChargingSpecial) {
+                    ctx.save();
+                    ctx.fillStyle = 'cyan';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`Phase ${this.specialPhase}`, this.x + this.width/2, this.y - 20);
+                    ctx.restore();
+                }
+            }
+            
+            renderRectangle(ctx) {
+                ctx.fillStyle = this.isPlayer1 ? 'blue' : 'red';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+            
+            renderHealthBar(ctx) {
+                const barWidth = 60;
+                const barHeight = 8;
+                const barX = this.x + (this.width - barWidth) / 2;
+                const barY = this.y - 15;
+                
+                ctx.fillStyle = 'red';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+                
+                ctx.fillStyle = 'green';
+                const healthWidth = (this.health / this.maxHealth) * barWidth;
+                ctx.fillRect(barX, barY, healthWidth, barHeight);
+                
+                ctx.strokeStyle = 'white';
+                ctx.strokeRect(barX, barY, barWidth, barHeight);
+            }
+        }
+
+        function init() {
+            log('🎬 Initialisation système cinématographique');
+            
+            players = [
+                new CinematicPlayer(200, 620, 'Ninja Blue', true),
+                new CinematicPlayer(900, 620, 'Ninja Red', false)
+            ];
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        let lastTime = 0;
+        function gameLoop(currentTime) {
+            if (!gameRunning) return;
+            
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            
+            update(deltaTime);
+            render();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(deltaTime) {
+            // Mise à jour joueurs
+            for (const player of players) {
+                player.update(deltaTime);
+            }
+            
+            // Mise à jour projectiles
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const projectile = projectiles[i];
+                
+                if (!projectile.update(deltaTime)) {
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+                
+                // Collision avec joueurs
+                for (const player of players) {
+                    if (projectile.owner !== player && projectile.checkCollision(player)) {
+                        player.takeDamage(projectile.damage);
+                        player.vx = projectile.direction * 200;
+                        projectiles.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+            
+            // Combat corps à corps
+            const [p1, p2] = players;
+            const distance = Math.abs(p1.x - p2.x);
+            
+            if (distance < 100) {
+                if (p1.isAttacking && !p1.hasHit && p1.animationFrame >= 2) {
+                    p2.takeDamage(20);
+                    p1.hasHit = true;
+                    p2.vx = p2.x > p1.x ? 300 : -300;
+                }
+                if (p2.isAttacking && !p2.hasHit && p2.animationFrame >= 2) {
+                    p1.takeDamage(20);
+                    p2.hasHit = true;
+                    p1.vx = p1.x > p2.x ? 300 : -300;
+                }
+            }
+            
+            // Interface
+            document.getElementById('p1Health').textContent = Math.round(p1.health);
+            document.getElementById('p2Health').textContent = Math.round(p2.health);
+            
+            // Victoire
+            if (p1.health <= 0) {
+                endGame('🏆 Joueur 2 gagne !');
+            } else if (p2.health <= 0) {
+                endGame('🏆 Joueur 1 gagne !');
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Effet slow motion
+            if (timeScale < 1.0) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(0, 100, 200, 0.15)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
+            
+            // Arrière-plan
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#98FB98');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Sol
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, 700, canvas.width, 100);
+            
+            // Plateformes
+            ctx.fillStyle = '#654321';
+            ctx.fillRect(300, 550, 200, 20);
+            ctx.fillRect(700, 400, 200, 20);
+            ctx.fillRect(500, 300, 200, 20);
+            
+            // Projectiles
+            for (const projectile of projectiles) {
+                projectile.render(ctx);
+            }
+            
+            // Joueurs
+            for (const player of players) {
+                player.render(ctx);
+            }
+            
+            // Effet slow motion global
+            if (timeScale < 1.0) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.9)';
+                ctx.font = 'bold 28px Arial';
+                ctx.textAlign = 'center';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.strokeText('⚡ CINEMATIC SLOW MOTION ⚡', canvas.width / 2, 100);
+                ctx.fillText('⚡ CINEMATIC SLOW MOTION ⚡', canvas.width / 2, 100);
+                ctx.restore();
+            }
+        }
+
+        function endGame(message) {
+            gameRunning = false;
+            log('🎯 ' + message);
+            setTimeout(() => {
+                alert(message + '\nAppuyez sur R pour rejouer !');
+            }, 100);
+        }
+
+        // Événements
+        window.addEventListener('load', init);
+        
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            // Attaques spéciales cinématiques
+            if (e.shiftKey && e.code === 'KeyG') {
+                e.preventDefault();
+                players[0].chargeSpecialAttack();
+            }
+            if (e.shiftKey && e.code === 'KeyL') {
+                e.preventDefault();
+                players[1].chargeSpecialAttack();
+            }
+            
+            if (e.code === 'KeyR') {
+                location.reload();
+            } else if (e.code === 'KeyP') {
+                gameRunning = !gameRunning;
+                if (gameRunning) requestAnimationFrame(gameLoop);
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Assets - Jump Ultimate Stars</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #test-canvas {
+            border: 2px solid #16213e;
+            background: #0f3460;
+            display: block;
+            margin: 20px auto;
+        }
+        .test-info {
+            text-align: center;
+            margin: 20px;
+        }
+        .character-test {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #333;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-info">
+        <h1>Test de Chargement des Assets</h1>
+        <p>Ce test vérifie si tes sprites se chargent correctement.</p>
+    </div>
+    
+    <canvas id="test-canvas" width="800" height="400"></canvas>
+    
+    <div id="log" class="test-info">
+        <h3>Log de chargement:</h3>
+        <div id="log-content"></div>
+    </div>
+    
+    <script src="js/utils.js"></script>
+    <script src="js/assets.js"></script>
+    <script>
+        const canvas = document.getElementById('test-canvas');
+        const ctx = canvas.getContext('2d');
+        const logContent = document.getElementById('log-content');
+        
+        function log(message) {
+            console.log(message);
+            logContent.innerHTML += '<div>' + message + '</div>';
+        }
+        
+        async function testAssetLoading() {
+            log('Début du test de chargement...');
+            
+            const assetManager = new AssetManager();
+            
+            assetManager.onProgress = (loaded, total) => {
+                const percentage = Math.round((loaded / total) * 100);
+                log(`Progression: ${loaded}/${total} (${percentage}%)`);
+            };
+            
+            assetManager.onComplete = () => {
+                log('Chargement terminé !');
+                testRender(assetManager);
+            };
+            
+            try {
+                await assetManager.loadAllAssets();
+                log('Assets chargés avec succès !');
+            } catch (error) {
+                log('Erreur lors du chargement: ' + error);
+            }
+        }
+        
+        function testRender(assetManager) {
+            log('Test de rendu des sprites...');
+            
+            // Effacer le canvas
+            ctx.fillStyle = '#0f3460';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Tester le rendu des sprites ninja
+            const ninjaIdle = assetManager.getImage('ninja_idle');
+            const ninjaIcon = assetManager.getImage('ninja_icon');
+            
+            let x = 50;
+            
+            if (ninjaIdle) {
+                ctx.drawImage(ninjaIdle, x, 100);
+                log('✓ ninja_idle rendu à x=' + x);
+                x += 100;
+            } else {
+                log('✗ ninja_idle non trouvé');
+            }
+            
+            if (ninjaIcon) {
+                ctx.drawImage(ninjaIcon, x, 100);
+                log('✓ ninja_icon rendu à x=' + x);
+                x += 100;
+            } else {
+                log('✗ ninja_icon non trouvé');
+            }
+            
+            // Tester les autres animations ninja
+            const animations = ['walk', 'jump', 'attack', 'hurt'];
+            for (const anim of animations) {
+                const img = assetManager.getImage('ninja_' + anim);
+                if (img) {
+                    ctx.drawImage(img, x, 100);
+                    log('✓ ninja_' + anim + ' rendu à x=' + x);
+                    x += 100;
+                } else {
+                    log('✗ ninja_' + anim + ' non trouvé');
+                }
+            }
+            
+            // Informations sur les images
+            log('--- Informations des images ---');
+            if (ninjaIdle) {
+                log(`ninja_idle: ${ninjaIdle.width}x${ninjaIdle.height}px`);
+            }
+            if (ninjaIcon) {
+                log(`ninja_icon: ${ninjaIcon.width}x${ninjaIcon.height}px`);
+            }
+        }
+        
+        // Démarrer le test
+        testAssetLoading();
+    </script>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jump Ultimate Stars - Version Simple</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #gameCanvas {
+            border: 3px solid #0e4b99;
+            background: linear-gradient(180deg, #87CEEB 0%, #98FB98 100%);
+            box-shadow: 0 0 20px rgba(14, 75, 153, 0.5);
+        }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        #gameInfo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: right;
+        }
+        
+        .start-button {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .start-button:hover {
+            background: #c0392b;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="1200" height="800"></canvas>
+        
+        <div id="controls">
+            <strong>Contrôles:</strong><br>
+            Joueur 1: WASD + G (attaque)<br>
+            Joueur 2: ↑↓←→ + L (attaque)<br>
+            R: Redémarrer | P: Pause
+        </div>
+        
+        <div id="gameInfo">
+            <div>Santé P1: <span id="p1Health">100</span>%</div>
+            <div>Santé P2: <span id="p2Health">100</span>%</div>
+            <div>Temps: <span id="gameTimer">99</span>s</div>
+        </div>
+        
+        <button class="start-button" onclick="startGame()">COMMENCER LE COMBAT !</button>
+    </div>
+
+    <!-- Scripts du jeu -->
+    <script src="js/utils.js"></script>
+    <script src="js/assets.js"></script>
+    <script src="js/physics.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/characters.js"></script>
+    
+    <script>
+        // Version simplifiée du jeu
+        class SimpleGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.running = false;
+                
+                // Gestionnaire d'assets
+                this.assetManager = new AssetManager();
+                this.assetsLoaded = false;
+                
+                // Systèmes
+                this.inputManager = new InputManager();
+                this.physicsWorld = new PhysicsWorld();
+                this.particleSystem = new ParticleSystem();
+                
+                // Joueurs
+                this.players = [];
+                
+                // Timer
+                this.gameTimer = 99;
+                this.lastTime = 0;
+                
+                // Interface
+                this.p1HealthSpan = document.getElementById('p1Health');
+                this.p2HealthSpan = document.getElementById('p2Health');
+                this.gameTimerSpan = document.getElementById('gameTimer');
+                
+                this.init();
+            }
+            
+            async init() {
+                console.log('Initialisation du jeu simple...');
+                
+                // Charger les assets
+                try {
+                    await this.assetManager.loadAllAssets();
+                    this.assetsLoaded = true;
+                    console.log('Assets chargés avec succès !');
+                } catch (error) {
+                    console.warn('Erreur chargement assets:', error);
+                    this.assetsLoaded = true; // Continuer quand même
+                }
+                
+                // Initialiser le monde physique
+                this.physicsWorld.initializePlatforms();
+                
+                // Créer les joueurs
+                this.createPlayers();
+                
+                console.log('Jeu initialisé !');
+            }
+            
+            createPlayers() {
+                // Joueur 1 (Ninja) - Position gauche
+                const player1 = new Character('ninja', 200, 500);
+                player1.isPlayer1 = true;
+                player1.color = '#2c3e50';
+                
+                // Joueur 2 (Warrior) - Position droite  
+                const player2 = new Character('warrior', 1000, 500);
+                player2.isPlayer1 = false;
+                player2.color = '#e74c3c';
+                player2.facingLeft = true;
+                
+                // Ajouter les sprite renderers si les assets sont chargés
+                if (this.assetsLoaded) {
+                    player1.spriteRenderer = new SpriteRenderer(player1, this.assetManager);
+                    player2.spriteRenderer = new SpriteRenderer(player2, this.assetManager);
+                    console.log('Sprite renderers créés pour les joueurs');
+                }
+                
+                this.players = [player1, player2];
+                console.log('Joueurs créés:', this.players.length);
+            }
+            
+            start() {
+                if (this.running) return;
+                
+                this.running = true;
+                console.log('Démarrage du jeu...');
+                
+                // Cacher le bouton de démarrage
+                document.querySelector('.start-button').style.display = 'none';
+                
+                // Démarrer la boucle de jeu
+                this.gameLoop = this.gameLoop.bind(this);
+                requestAnimationFrame(this.gameLoop);
+            }
+            
+            gameLoop(currentTime) {
+                if (!this.running) return;
+                
+                const deltaTime = currentTime - this.lastTime;
+                this.lastTime = currentTime;
+                
+                // Mise à jour
+                this.update(deltaTime);
+                
+                // Rendu
+                this.render();
+                
+                // Continuer la boucle
+                requestAnimationFrame(this.gameLoop);
+            }
+            
+            update(deltaTime) {
+                // Mettre à jour l'input
+                this.inputManager.update();
+                
+                // Mettre à jour les joueurs
+                for (const player of this.players) {
+                    // Input du joueur 1 (WASD + G)
+                    if (player.isPlayer1) {
+                        const input = {
+                            left: this.inputManager.isKeyPressed('KeyA'),
+                            right: this.inputManager.isKeyPressed('KeyD'),
+                            jump: this.inputManager.isKeyPressed('KeyW'),
+                            attack: this.inputManager.isKeyPressed('KeyG'),
+                            special: this.inputManager.isKeyPressed('KeyS')
+                        };
+                        player.handleInput(input);
+                    } else {
+                        // Input du joueur 2 (Flèches + L)
+                        const input = {
+                            left: this.inputManager.isKeyPressed('ArrowLeft'),
+                            right: this.inputManager.isKeyPressed('ArrowRight'),
+                            jump: this.inputManager.isKeyPressed('ArrowUp'),
+                            attack: this.inputManager.isKeyPressed('KeyL'),
+                            special: this.inputManager.isKeyPressed('ArrowDown')
+                        };
+                        player.handleInput(input);
+                    }
+                    
+                    // Mettre à jour le joueur
+                    player.update(deltaTime, this.physicsWorld);
+                }
+                
+                // Vérifier les collisions entre joueurs
+                this.checkPlayerCollisions();
+                
+                // Mettre à jour l'interface
+                this.updateUI();
+                
+                // Vérifications de victoire
+                this.checkWinConditions();
+            }
+            
+            checkPlayerCollisions() {
+                const [p1, p2] = this.players;
+                
+                if (p1.getBounds().intersects(p2.getBounds())) {
+                    // Combat au corps à corps
+                    if (p1.isAttacking && !p1.hasHit) {
+                        p2.takeDamage(p1.attackDamage);
+                        p1.hasHit = true;
+                        
+                        // Effet de recul
+                        const direction = p2.position.x > p1.position.x ? 1 : -1;
+                        p2.velocity.x += direction * 200;
+                        
+                        console.log('P1 frappe P2 !');
+                    }
+                    
+                    if (p2.isAttacking && !p2.hasHit) {
+                        p1.takeDamage(p2.attackDamage);
+                        p2.hasHit = true;
+                        
+                        // Effet de recul
+                        const direction = p1.position.x > p2.position.x ? 1 : -1;
+                        p1.velocity.x += direction * 200;
+                        
+                        console.log('P2 frappe P1 !');
+                    }
+                }
+            }
+            
+            updateUI() {
+                this.p1HealthSpan.textContent = Math.max(0, Math.round(this.players[0].health));
+                this.p2HealthSpan.textContent = Math.max(0, Math.round(this.players[1].health));
+                this.gameTimerSpan.textContent = Math.max(0, Math.round(this.gameTimer));
+            }
+            
+            checkWinConditions() {
+                const [p1, p2] = this.players;
+                
+                if (p1.health <= 0) {
+                    this.endGame('Joueur 2 (Warrior) gagne !');
+                } else if (p2.health <= 0) {
+                    this.endGame('Joueur 1 (Ninja) gagne !');
+                }
+            }
+            
+            endGame(message) {
+                this.running = false;
+                alert(message + '\nAppuyez sur F5 pour rejouer !');
+            }
+            
+            render() {
+                // Effacer le canvas
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Arrière-plan du ciel
+                const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+                gradient.addColorStop(0, '#87CEEB');
+                gradient.addColorStop(1, '#98FB98');
+                this.ctx.fillStyle = gradient;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Dessiner les plateformes
+                this.physicsWorld.render(this.ctx);
+                
+                // Dessiner les joueurs
+                for (const player of this.players) {
+                    player.render(this.ctx);
+                }
+                
+                // Effets visuels
+                this.particleSystem.render(this.ctx);
+            }
+        }
+        
+        // Variables globales
+        let game;
+        
+        function startGame() {
+            if (!game) {
+                game = new SimpleGame();
+            }
+            game.start();
+        }
+        
+        // Initialiser le jeu au chargement
+        window.addEventListener('load', () => {
+            game = new SimpleGame();
+        });
+        
+        // Gestion des touches
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyR') {
+                location.reload(); // Redémarrer
+            } else if (e.code === 'KeyP') {
+                if (game) game.running = !game.running; // Pause
+            }
+        });
+    </script>
+</body>
+</html>

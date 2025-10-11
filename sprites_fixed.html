@@ -289,10 +289,13 @@
                             this.specialPhase = 0;
                             this.specialCooldown = this.specialCooldownDuration;
                             this.animationState = 'idle';
+                            this.animationFrame = 1; // CORRECTION: Commencer à 1, pas 0
                         }
                         
                         this.updatePhaseDisplay();
-                        this.animationFrame = this.specialPhase;
+                        if (this.isChargingSpecial) {
+                            this.animationFrame = this.specialPhase;
+                        }
                     }
                     
                     return;
@@ -423,16 +426,7 @@
             }
             
             render(ctx) {
-                // Effet spécial pendant charge
-                if (this.isChargingSpecial) {
-                    const intensity = 0.3 + 0.4 * (this.specialPhase / 6);
-                    ctx.save();
-                    ctx.shadowColor = 'cyan';
-                    ctx.shadowBlur = 20 * intensity;
-                    ctx.fillStyle = `rgba(0, 255, 255, ${intensity})`;
-                    ctx.fillRect(this.x - 10, this.y - 10, this.width + 20, this.height + 20);
-                    ctx.restore();
-                }
+                // Effet spécial pendant charge - SUPPRIMÉ
                 
                 // Obtenir le sprite
                 const sprite = getSprite(this.animationState, this.animationFrame);

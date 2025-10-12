@@ -47,9 +47,10 @@
         <canvas id="gameCanvas" width="1200" height="800" style="display: none;"></canvas>
         
         <div id="controls" style="display: none;">
-            <strong>🎮 Jump Ultimate Stars - SPRITES RÉPARÉS</strong><br>
-            Joueur 1: WASD + G + <span style="color: cyan;">Shift+G (Technique Spéciale)</span><br>
-            Joueur 2: ↑↓←→ + L + <span style="color: cyan;">Shift+L (Technique Spéciale)</span><br>
+            <strong>🎮 Jump Ultimate Stars - SYSTÈME DE COMBOS</strong><br>
+            Joueur 1: WASD + G (attaque) + U (uppercut) + F (attaque basse) + <span style="color: cyan;">Shift+G (Technique Spéciale)</span><br>
+            Joueur 2: ↑↓←→ + L (attaque) + U (uppercut) + F (attaque basse) + <span style="color: cyan;">Shift+L (Technique Spéciale)</span><br>
+            <span style="color: gold;">⚡ COMBOS: G+G/L+L (double frappe) | U (uppercut) | F (attaque basse)</span><br>
             R: Redémarrer | P: Pause
         </div>
         
@@ -82,6 +83,10 @@
             'ninja_jump1.png', 'ninja_jump2.png',
             'ninja_attack1.png', 'ninja_attack2.png', 'ninja_attack3.png',
             'ninja_hurt1.png', 'ninja_hurt2.png',
+            // Nouveaux sprites de combos
+            'ninja_uppercut1.png', 'ninja_uppercut2.png', 'ninja_uppercut3.png',
+            'ninja_low1.png', 'ninja_low2.png', 'ninja_low3.png',
+            'ninja_double1.png', 'ninja_double2.png', 'ninja_double3.png',
             // Sprites spéciaux (fallback vers attack si pas trouvé)
             'special/ninja_special1.png', 'special/ninja_special2.png', 'special/ninja_special3.png',
             'special/ninja_special4.png', 'special/ninja_special5.png', 'special/ninja_special6.png'
@@ -100,6 +105,7 @@
                 img.onload = () => {
                     sprites[spritePath] = img;
                     spritesLoaded++;
+                    console.log(`✅ Sprite chargé: ${spritePath}`);
                     document.getElementById('loading').textContent = `⏳ Chargement des sprites... (${spritesLoaded}/${totalSprites})`;
                     
                     if (spritesLoaded === totalSprites) {
@@ -108,7 +114,7 @@
                 };
                 
                 img.onerror = () => {
-                    console.warn(`Sprite non trouvé: ${fullPath}`);
+                    console.error(`❌ ERREUR: Sprite non trouvé: ${fullPath}`);
                     // Utiliser une image de fallback ou rectangle
                     sprites[spritePath] = null;
                     spritesLoaded++;
@@ -137,18 +143,40 @@
         function getSprite(animationState, frame) {
             let spritePath;
             
-            if (animationState === 'special') {
+            // Gestion des nouveaux états de combo
+            if (animationState === 'uppercut') {
+                spritePath = `ninja_uppercut${frame}.png`;
+                if (sprites[spritePath]) return sprites[spritePath];
+                spritePath = `ninja_attack${Math.min(frame, 3)}.png`;
+                return sprites[spritePath] || null;
+            } else if (animationState === 'low') {
+                spritePath = `ninja_low${frame}.png`;
+                if (sprites[spritePath]) return sprites[spritePath];
+                spritePath = `ninja_attack${Math.min(frame, 3)}.png`;
+                return sprites[spritePath] || null;
+            } else if (animationState === 'double') {
+                spritePath = `ninja_double${frame}.png`;
+                if (sprites[spritePath]) return sprites[spritePath];
+                spritePath = `ninja_attack${Math.min(frame, 3)}.png`;
+                return sprites[spritePath] || null;
+            } else if (animationState === 'down') {
+                // Pour l'état au sol, utiliser hurt comme fallback
+                spritePath = `ninja_down${frame}.png`;
+                if (sprites[spritePath]) return sprites[spritePath];
+                spritePath = `ninja_hurt${Math.min(frame, 2)}.png`;
+                return sprites[spritePath] || null;
+            } else if (animationState === 'special') {
                 spritePath = `special/ninja_special${frame}.png`;
                 if (sprites[spritePath]) return sprites[spritePath];
                 
-                // Fallback vers attack
                 const attackFrame = Math.min(frame, 3);
                 spritePath = `ninja_attack${attackFrame}.png`;
                 return sprites[spritePath] || null;
             } else {
                 spritePath = `ninja_${animationState}${frame}.png`;
-                return sprites[spritePath] || null;
             }
+            
+            return sprites[spritePath] || null;
         }
 
         // Classe Projectile
@@ -232,6 +260,27 @@
                 this.specialPhaseDurations = [0, 300, 300, 300, 200, 250, 250];
                 this.specialCooldown = 0;
                 this.specialCooldownDuration = 3000;
+                
+                // Système de combos
+                this.comboType = 'normal'; // 'normal', 'uppercut', 'low'
+                this.lastAttackTime = 0;
+                this.comboWindow = 600; // 600ms pour enchaîner G+G (plus facile)
+                this.isDoubleAttack = false;
+                this.doubleAttackTimer = 0;
+                
+                // Debug visual
+                this.debugText = "";
+                this.debugTimer = 0;
+                this.doubleAttackDuration = 600;
+                
+                // Système hurt amélioré
+                this.isHurt = false;
+                this.hurtTimer = 0;
+                
+                // Système de chute au sol
+                this.isDown = false;
+                this.downTimer = 0;
+                this.downDuration = 2000; // 2 secondes au sol
             }
             
             chargeSpecialAttack() {
@@ -303,47 +352,64 @@
                 
                 let isMoving = false;
                 
-                if (this.isPlayer1) {
-                    if (keys['KeyA']) {
-                        this.vx = -this.speed;
-                        this.facingLeft = true;
-                        isMoving = true;
-                    } else if (keys['KeyD']) {
-                        this.vx = this.speed;
-                        this.facingLeft = false;
-                        isMoving = true;
+                // Empêcher toute action si le joueur est au sol
+                if (!this.isDown) {
+                    if (this.isPlayer1) {
+                        if (keys['KeyA']) {
+                            this.vx = -this.speed;
+                            this.facingLeft = true;
+                            isMoving = true;
+                        } else if (keys['KeyD']) {
+                            this.vx = this.speed;
+                            this.facingLeft = false;
+                            isMoving = true;
+                        } else {
+                            this.vx = 0;
+                        }
+                        
+                        if (keys['KeyW'] && this.onGround) {
+                            this.vy = -this.jumpPower;
+                            this.onGround = false;
+                        }
+                        
+                        // Touches d'attaque et combos
+                        if (keys['KeyG'] && !this.isAttacking && !this.isHurt) {
+                            this.handleComboAttack();
+                        }
+                        if (keys['KeyU'] && !this.isAttacking && !this.isHurt) {
+                            this.handleComboAttack();
+                        }
+                        if (keys['KeyF'] && !this.isAttacking && !this.isHurt) {
+                            this.handleComboAttack();
+                        }
                     } else {
-                        this.vx = 0;
-                    }
-                    
-                    if (keys['KeyW'] && this.onGround) {
-                        this.vy = -this.jumpPower;
-                        this.onGround = false;
-                    }
-                    
-                    if (keys['KeyG'] && !this.isAttacking) {
-                        this.attack();
-                    }
-                } else {
-                    if (keys['ArrowLeft']) {
-                        this.vx = -this.speed;
-                        this.facingLeft = true;
-                        isMoving = true;
-                    } else if (keys['ArrowRight']) {
-                        this.vx = this.speed;
-                        this.facingLeft = false;
-                        isMoving = true;
-                    } else {
-                        this.vx = 0;
-                    }
-                    
-                    if (keys['ArrowUp'] && this.onGround) {
-                        this.vy = -this.jumpPower;
-                        this.onGround = false;
-                    }
-                    
-                    if (keys['KeyL'] && !this.isAttacking) {
-                        this.attack();
+                        if (keys['ArrowLeft']) {
+                            this.vx = -this.speed;
+                            this.facingLeft = true;
+                            isMoving = true;
+                        } else if (keys['ArrowRight']) {
+                            this.vx = this.speed;
+                            this.facingLeft = false;
+                            isMoving = true;
+                        } else {
+                            this.vx = 0;
+                        }
+                        
+                        if (keys['ArrowUp'] && this.onGround) {
+                            this.vy = -this.jumpPower;
+                            this.onGround = false;
+                        }
+                        
+                        // Touches d'attaque et combos
+                        if (keys['KeyL'] && !this.isAttacking && !this.isHurt) {
+                            this.handleComboAttack();
+                        }
+                        if (keys['KeyU'] && !this.isAttacking && !this.isHurt) {
+                            this.handleComboAttack();
+                        }
+                        if (keys['KeyF'] && !this.isAttacking && !this.isHurt) {
+                            this.handleComboAttack();
+                        }
                     }
                 }
                 
@@ -361,23 +427,53 @@
                 
                 this.updateAnimation(scaledDeltaTime, isMoving);
                 
+                // Gestion du timer de double attaque
+                if (this.isDoubleAttack) {
+                    this.doubleAttackTimer += scaledDeltaTime;
+                    if (this.doubleAttackTimer >= this.doubleAttackDuration) {
+                        this.isDoubleAttack = false;
+                        this.doubleAttackTimer = 0;
+                    }
+                }
+                
                 if (this.isAttacking) {
                     this.attackTimer += scaledDeltaTime;
                     if (this.attackTimer >= this.attackDuration) {
                         this.isAttacking = false;
                         this.attackTimer = 0;
                         this.hasHit = false;
+                        this.comboType = 'normal'; // Reset combo type
                     }
                 }
             }
             
             updateAnimation(deltaTime, isMoving) {
+                // Gestion des timers
+                if (this.hurtTimer > 0) {
+                    this.hurtTimer -= deltaTime * 1000;
+                    if (this.hurtTimer <= 0) {
+                        this.isHurt = false;
+                    }
+                }
+                
+                if (this.downTimer > 0) {
+                    this.downTimer -= deltaTime * 1000;
+                    if (this.downTimer <= 0) {
+                        this.isDown = false;
+                    }
+                }
+                
                 let newState;
                 
-                if (this.isChargingSpecial) {
+                if (this.isDown) {
+                    newState = 'down'; // État au sol
+                } else if (this.isHurt) {
+                    newState = 'hurt'; // État blessé
+                } else if (this.isChargingSpecial) {
                     newState = 'special';
                 } else if (this.isAttacking) {
-                    newState = 'attack';
+                    // Utiliser l'état d'animation défini par le combo au lieu de forcer 'attack'
+                    newState = this.animationState; // Garder l'état actuel (uppercut, low, double, attack)
                 } else if (!this.onGround) {
                     newState = 'jump';
                 } else if (isMoving) {
@@ -401,7 +497,8 @@
                         this.animationFrame++;
                         
                         const maxFrames = {
-                            'idle': 3, 'walk': 4, 'jump': 2, 'attack': 3, 'hurt': 2, 'special': 6
+                            'idle': 3, 'walk': 4, 'jump': 2, 'attack': 3, 'hurt': 2, 'special': 6,
+                            'uppercut': 3, 'low': 3, 'double': 3, 'down': 2
                         };
                         
                         const maxFrame = maxFrames[this.animationState] || 1;
@@ -412,22 +509,98 @@
                 }
             }
             
+            handleComboAttack() {
+                const currentTime = Date.now();
+                const timeSinceLastAttack = currentTime - this.lastAttackTime;
+                
+                // Détection des combos selon les touches pressées
+                if (keys['KeyU']) {
+                    // Uppercut (U)
+                    this.comboType = 'uppercut';
+                    this.attack();
+                    console.log(`${this.type}: UPPERCUT!`);
+                } else if (keys['KeyF']) {
+                    // Attaque basse (F)
+                    this.comboType = 'low';
+                    this.attack();
+                    console.log(`${this.type}: ATTAQUE BASSE!`);
+                } else if (timeSinceLastAttack < this.comboWindow && timeSinceLastAttack > 50) {
+                    // Double frappe (G+G) - détection améliorée
+                    this.comboType = 'double';
+                    this.isDoubleAttack = true;
+                    this.doubleAttackTimer = 0;
+                    this.attack();
+                    console.log(`${this.type}: DOUBLE FRAPPE! (timing: ${timeSinceLastAttack}ms)`);
+                } else {
+                    // Attaque normale
+                    this.comboType = 'normal';
+                    this.attack();
+                    console.log(`${this.type}: ATTAQUE NORMALE (timing: ${timeSinceLastAttack}ms)`);
+                }
+                
+                this.lastAttackTime = currentTime;
+            }
+            
             attack() {
                 this.isAttacking = true;
                 this.attackTimer = 0;
                 this.hasHit = false;
+                
+                // Définir l'état d'animation selon le type de combo
+                switch(this.comboType) {
+                    case 'uppercut':
+                        this.animationState = 'uppercut';
+                        this.attackDuration = 700; // Uppercut un peu plus long
+                        console.log(`${this.type}: Animation UPPERCUT activée!`);
+                        // Debug visible à l'écran
+                        this.debugText = "UPPERCUT!";
+                        this.debugTimer = 60;
+                        break;
+                    case 'low':
+                        this.animationState = 'low';
+                        this.attackDuration = 600; // Attaque basse rapide
+                        console.log(`${this.type}: Animation LOW activée!`);
+                        // Debug visible à l'écran
+                        this.debugText = "LOW ATTACK!";
+                        this.debugTimer = 60;
+                        break;
+                    case 'double':
+                        this.animationState = 'double';
+                        this.attackDuration = 800; // Plus long pour double frappe
+                        console.log(`${this.type}: Animation DOUBLE activée!`);
+                        // Debug visible à l'écran
+                        this.debugText = "DOUBLE HIT!";
+                        this.debugTimer = 60;
+                        break;
+                    default:
+                        this.animationState = 'attack';
+                        this.attackDuration = 500; // Attaque normale
+                        console.log(`${this.type}: Animation ATTACK normale`);
+                        // Debug visible à l'écran
+                        this.debugText = "NORMAL ATTACK";
+                        this.debugTimer = 60;
+                }
+                
+                // Reset de l'animation
+                this.animationFrame = 1;
             }
             
             takeDamage(amount) {
                 this.health -= amount;
                 this.health = Math.max(0, this.health);
+                
+                // État de hurt plus long et visible
                 this.animationState = 'hurt';
                 this.animationFrame = 1;
+                this.hurtTimer = 800; // Durée d'état hurt (800ms)
+                this.isHurt = true;
+                
+                // Interruption des actions en cours
+                this.isAttacking = false;
+                this.isChargingSpecial = false;
             }
             
             render(ctx) {
-                // Effet spécial pendant charge - SUPPRIMÉ
-                
                 // Obtenir le sprite
                 const sprite = getSprite(this.animationState, this.animationFrame);
                 
@@ -450,6 +623,20 @@
                     ctx.font = '12px Arial';
                     ctx.textAlign = 'center';
                     ctx.fillText(`${this.animationState}${this.animationFrame}`, this.x + this.width/2, this.y + this.height/2);
+                }
+                
+                // Affichage debug combo
+                if (this.debugTimer > 0) {
+                    ctx.save();
+                    ctx.fillStyle = 'yellow';
+                    ctx.font = 'bold 20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    ctx.strokeText(this.debugText, this.x + this.width/2, this.y - 30);
+                    ctx.fillText(this.debugText, this.x + this.width/2, this.y - 30);
+                    this.debugTimer--;
+                    ctx.restore();
                 }
                 
                 // Barre de vie
@@ -477,6 +664,8 @@
                     ctx.fillText(`Phase ${this.specialPhase}`, this.x + this.width/2, this.y - 30);
                     ctx.restore();
                 }
+                
+
             }
         }
 
@@ -530,19 +719,102 @@
             
             if (distance < 100) {
                 if (p1.isAttacking && !p1.hasHit && p1.animationFrame >= 2) {
-                    p2.takeDamage(20);
-                    p1.hasHit = true;
-                    p2.vx = p2.x > p1.x ? 300 : -300;
+                    // Vérifier que p1 attaque dans la bonne direction
+                    const isHitting = p1.facingLeft ? (p2.x < p1.x) : (p2.x > p1.x);
+                    
+                    if (isHitting) {
+                        let damage = calculateComboDamage(p1);
+                        let knockback = calculateComboKnockback(p1);
+                        
+                        p2.takeDamage(damage);
+                        p1.hasHit = true;
+                        
+                        // Effets selon le type de combo
+                        if (p1.comboType === 'uppercut') {
+                            p2.vy = -400; // Projette vers le haut
+                            p2.vx = (p2.x > p1.x ? 200 : -200);
+                        } else if (p1.comboType === 'low') {
+                            // Low attack met l'adversaire au sol !
+                            p2.isDown = true;
+                            p2.downTimer = p2.downDuration;
+                            p2.vy = 0; // Pas de projection verticale
+                            p2.vx = (p2.x > p1.x ? 200 : -200); // Petit recul
+                            console.log(`${p2.type}: KNOCKED DOWN!`);
+                        } else {
+                            p2.vx = (p2.x > p1.x ? knockback : -knockback);
+                        }
+                        
+                        // Affichage du type d'attaque
+                        showComboNotification(p1);
+                    }
                 }
                 if (p2.isAttacking && !p2.hasHit && p2.animationFrame >= 2) {
-                    p1.takeDamage(20);
-                    p2.hasHit = true;
-                    p1.vx = p1.x > p2.x ? 300 : -300;
+                    // Vérifier que p2 attaque dans la bonne direction
+                    const isHitting = p2.facingLeft ? (p1.x < p2.x) : (p1.x > p2.x);
+                    
+                    if (isHitting) {
+                        let damage = calculateComboDamage(p2);
+                        let knockback = calculateComboKnockback(p2);
+                        
+                        p1.takeDamage(damage);
+                        p2.hasHit = true;
+                        
+                        // Effets selon le type de combo
+                        if (p2.comboType === 'uppercut') {
+                            p1.vy = -400; // Projette vers le haut
+                            p1.vx = (p1.x > p2.x ? 200 : -200);
+                        } else if (p2.comboType === 'low') {
+                            // Low attack met l'adversaire au sol !
+                            p1.isDown = true;
+                            p1.downTimer = p1.downDuration;
+                            p1.vy = 0; // Pas de projection verticale
+                            p1.vx = (p1.x > p2.x ? 200 : -200); // Petit recul
+                            console.log(`${p1.type}: KNOCKED DOWN!`);
+                        } else {
+                            p1.vx = (p1.x > p2.x ? knockback : -knockback);
+                        }
+                        
+                        // Affichage du type d'attaque
+                        showComboNotification(p2);
+                    }
                 }
             }
             
             document.getElementById('p1Health').textContent = Math.round(p1.health);
             document.getElementById('p2Health').textContent = Math.round(p2.health);
+        }
+
+        // Fonctions utilitaires pour les combos
+        function calculateComboDamage(player) {
+            switch(player.comboType) {
+                case 'double': return player.isDoubleAttack ? 35 : 25; // Double frappe fait plus de dégâts
+                case 'uppercut': return 30; // Uppercut puissant
+                case 'low': return 15; // Attaque basse rapide mais faible
+                default: return 20; // Attaque normale
+            }
+        }
+
+        function calculateComboKnockback(player) {
+            switch(player.comboType) {
+                case 'double': return 400; // Double frappe projette fort
+                case 'uppercut': return 250; // Uppercut moyenne projection horizontale
+                case 'low': return 450; // Attaque basse fait glisser
+                default: return 300; // Attaque normale
+            }
+        }
+
+        function showComboNotification(player) {
+            // Notification temporaire (à améliorer visuellement plus tard)
+            const comboNames = {
+                'double': 'DOUBLE HIT!',
+                'uppercut': 'UPPERCUT!',
+                'low': 'LOW ATTACK!',
+                'normal': 'HIT!'
+            };
+            
+            console.log(`${player.type}: ${comboNames[player.comboType] || 'HIT!'}`);
+            
+            // TODO: Ajouter affichage visuel dans le jeu
         }
 
         function render() {

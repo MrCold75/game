@@ -70,6 +70,10 @@
         let players = [];
         let projectiles = [];
         let timeScale = 1.0;
+        let impactEffects = [];
+        
+        // Système de screen shake
+        let screenShake = { x: 0, y: 0, intensity: 0, duration: 0 };
         
         // SYSTÈME DE PRÉCHARGEMENT DES SPRITES
         const sprites = {};
@@ -87,11 +91,47 @@
             'ninja_uppercut1.png', 'ninja_uppercut2.png', 'ninja_uppercut3.png',
             'ninja_low1.png', 'ninja_low2.png', 'ninja_low3.png',
             'ninja_double1.png', 'ninja_double2.png', 'ninja_double3.png',
+            // Sprites de knockdown et relever
+            'ninja_down1.png', 'ninja_down2.png', 'ninja_down3.png',
+            'ninja_getup1.png', 'ninja_getup2.png', 'ninja_getup3.png', 'ninja_getup4.png',
             // Sprites spéciaux (fallback vers attack si pas trouvé)
             'special/ninja_special1.png', 'special/ninja_special2.png', 'special/ninja_special3.png',
             'special/ninja_special4.png', 'special/ninja_special5.png', 'special/ninja_special6.png'
         ];
         
+        // Fonction pour obtenir le chemin correct selon la nouvelle organisation
+        function getSpritePath(spriteName) {
+            const [character, ...actionParts] = spriteName.split('_');
+            const fullAction = actionParts.join('_'); // Rejoint au cas où il y aurait plusieurs underscores
+            
+            // Mapping des actions vers les catégories
+            const categoryMapping = {
+                'idle': 'basic',
+                'walk': 'basic', 
+                'jump': 'basic',
+                'icon': 'basic',
+                'attack': 'combat',
+                'hurt': 'combat',
+                'uppercut': 'special',
+                'low': 'special',
+                'double': 'special',
+                'down': 'special',
+                'getup': 'special'
+            };
+            
+            // Extraire l'action de base (sans le numéro)
+            let baseAction = 'idle';
+            for (const action in categoryMapping) {
+                if (fullAction.startsWith(action)) {
+                    baseAction = action;
+                    break;
+                }
+            }
+            
+            const category = categoryMapping[baseAction] || 'basic';
+            return `${character}/${category}/${spriteName}`;
+        }
+
         function preloadSprites() {
             totalSprites = spriteList.length;
             document.getElementById('loading').textContent = `⏳ Chargement des sprites... (0/${totalSprites})`;
@@ -100,7 +140,7 @@
                 const img = new Image();
                 const fullPath = spritePath.startsWith('special/') 
                     ? `assets/characters/skills/${spritePath.replace('special/', '')}`
-                    : `assets/characters/${spritePath}`;
+                    : `assets/characters/${getSpritePath(spritePath)}`;
                 
                 img.onload = () => {
                     sprites[spritePath] = img;
@@ -160,8 +200,14 @@
                 spritePath = `ninja_attack${Math.min(frame, 3)}.png`;
                 return sprites[spritePath] || null;
             } else if (animationState === 'down') {
-                // Pour l'état au sol, utiliser hurt comme fallback
-                spritePath = `ninja_down${frame}.png`;
+                // Animation de chute au sol (3 frames)
+                spritePath = `ninja_down${Math.min(frame, 3)}.png`;
+                if (sprites[spritePath]) return sprites[spritePath];
+                spritePath = `ninja_hurt${Math.min(frame, 2)}.png`;
+                return sprites[spritePath] || null;
+            } else if (animationState === 'getup') {
+                // Animation de récupération (4 frames)
+                spritePath = `ninja_getup${Math.min(frame, 4)}.png`;
                 if (sprites[spritePath]) return sprites[spritePath];
                 spritePath = `ninja_hurt${Math.min(frame, 2)}.png`;
                 return sprites[spritePath] || null;
@@ -177,6 +223,112 @@
             }
             
             return sprites[spritePath] || null;
+        }
+
+        // Classe pour les effets visuels d'impact
+        class ImpactEffect {
+            constructor(x, y, type, duration = 300) {
+                this.x = x;
+                this.y = y;
+                this.type = type; // 'hit', 'critical', 'knockdown'
+                this.duration = duration;
+                this.timer = duration;
+                this.size = 0;
+                this.maxSize = type === 'knockdown' ? 80 : type === 'critical' ? 60 : 40;
+                this.alpha = 1.0;
+                this.particles = [];
+                
+                // Créer des particules pour l'effet
+                const particleCount = type === 'knockdown' ? 12 : type === 'critical' ? 8 : 5;
+                for (let i = 0; i < particleCount; i++) {
+                    this.particles.push({
+                        x: 0,
+                        y: 0,
+                        vx: (Math.random() - 0.5) * 200,
+                        vy: (Math.random() - 0.5) * 200,
+                        life: 1.0,
+                        size: Math.random() * 6 + 2
+                    });
+                }
+            }
+            
+            update(deltaTime) {
+                this.timer -= deltaTime * 1000;
+                const progress = 1 - (this.timer / this.duration);
+                
+                // Animation de taille (expansion puis contraction)
+                if (progress < 0.3) {
+                    this.size = (progress / 0.3) * this.maxSize;
+                } else {
+                    this.size = this.maxSize * (1 - (progress - 0.3) / 0.7);
+                }
+                
+                this.alpha = Math.max(0, 1 - progress);
+                
+                // Mettre à jour les particules
+                this.particles.forEach(p => {
+                    p.x += p.vx * deltaTime;
+                    p.y += p.vy * deltaTime;
+                    p.life -= deltaTime * 2; // Durée de vie des particules
+                });
+                
+                return this.timer > 0;
+            }
+            
+            render(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                
+                // Effet principal selon le type
+                ctx.translate(this.x, this.y);
+                
+                if (this.type === 'knockdown') {
+                    // Effet rouge intense pour knockdown
+                    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
+                    gradient.addColorStop(0, 'rgba(255, 50, 50, 0.8)');
+                    gradient.addColorStop(0.5, 'rgba(255, 100, 100, 0.4)');
+                    gradient.addColorStop(1, 'rgba(255, 150, 150, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(-this.size, -this.size, this.size * 2, this.size * 2);
+                    
+                    // Lignes d'impact
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.lineWidth = 3;
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (i / 8) * Math.PI * 2;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(Math.cos(angle) * this.size * 0.8, Math.sin(angle) * this.size * 0.8);
+                        ctx.stroke();
+                    }
+                } else if (this.type === 'critical') {
+                    // Effet jaune pour coup critique
+                    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
+                    gradient.addColorStop(0, 'rgba(255, 255, 50, 0.8)');
+                    gradient.addColorStop(0.5, 'rgba(255, 200, 100, 0.4)');
+                    gradient.addColorStop(1, 'rgba(255, 150, 50, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(-this.size, -this.size, this.size * 2, this.size * 2);
+                } else {
+                    // Effet bleu pour coup normal
+                    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
+                    gradient.addColorStop(0, 'rgba(100, 150, 255, 0.6)');
+                    gradient.addColorStop(0.5, 'rgba(150, 200, 255, 0.3)');
+                    gradient.addColorStop(1, 'rgba(200, 220, 255, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(-this.size, -this.size, this.size * 2, this.size * 2);
+                }
+                
+                // Rendre les particules
+                this.particles.forEach(p => {
+                    if (p.life > 0) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`;
+                        ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+                    }
+                });
+                
+                ctx.restore();
+            }
         }
 
         // Classe Projectile
@@ -281,6 +433,11 @@
                 this.isDown = false;
                 this.downTimer = 0;
                 this.downDuration = 2000; // 2 secondes au sol
+                
+                // Système de récupération
+                this.isGettingUp = false;
+                this.getupTimer = 0;
+                this.getupDuration = 1200; // 1.2 secondes pour se relever
             }
             
             chargeSpecialAttack() {
@@ -352,8 +509,8 @@
                 
                 let isMoving = false;
                 
-                // Empêcher toute action si le joueur est au sol
-                if (!this.isDown) {
+                // Empêcher toute action si le joueur est au sol ou se relève
+                if (!this.isDown && !this.isGettingUp) {
                     if (this.isPlayer1) {
                         if (keys['KeyA']) {
                             this.vx = -this.speed;
@@ -380,6 +537,7 @@
                             this.handleComboAttack();
                         }
                         if (keys['KeyF'] && !this.isAttacking && !this.isHurt) {
+                            console.log("🔥 JOUEUR 1 - TOUCHE F PRESSÉE!");
                             this.handleComboAttack();
                         }
                     } else {
@@ -450,23 +608,43 @@
             updateAnimation(deltaTime, isMoving) {
                 // Gestion des timers
                 if (this.hurtTimer > 0) {
-                    this.hurtTimer -= deltaTime * 1000;
+                    this.hurtTimer -= deltaTime;
                     if (this.hurtTimer <= 0) {
                         this.isHurt = false;
                     }
                 }
                 
-                if (this.downTimer > 0) {
-                    this.downTimer -= deltaTime * 1000;
-                    if (this.downTimer <= 0) {
-                        this.isDown = false;
-                    }
-                }
-                
                 let newState;
                 
+                // Debug pour voir l'état actuel
                 if (this.isDown) {
+                    console.log(`🔍 ${this.type}: isDown=${this.isDown}, downTimer=${this.downTimer}`);
+                }
+                
+                // Gérer les états dans le bon ordre
+                if (this.isDown && this.downTimer > 0) {
+                    // Décrémenter le timer pendant qu'on est au sol (deltaTime est déjà en millisecondes)
+                    this.downTimer -= deltaTime;
                     newState = 'down'; // État au sol
+                    console.log(`DEBUG: ${this.type} is DOWN - Timer: ${this.downTimer.toFixed(0)}`);
+                    
+                    if (this.downTimer <= 0) {
+                        // Passer à la phase de récupération
+                        this.isDown = false;
+                        this.isGettingUp = true;
+                        this.getupTimer = this.getupDuration;
+                        console.log(`${this.type}: Début de la récupération`);
+                    }
+                } else if (this.isGettingUp && this.getupTimer > 0) {
+                    // Décrémenter le timer pendant qu'on se relève (deltaTime est déjà en millisecondes)
+                    this.getupTimer -= deltaTime;
+                    newState = 'getup'; // État de récupération
+                    console.log(`DEBUG: ${this.type} is GETTING UP - Timer: ${this.getupTimer.toFixed(0)}`);
+                    
+                    if (this.getupTimer <= 0) {
+                        this.isGettingUp = false;
+                        console.log(`${this.type}: Récupération terminée`);
+                    }
                 } else if (this.isHurt) {
                     newState = 'hurt'; // État blessé
                 } else if (this.isChargingSpecial) {
@@ -498,7 +676,7 @@
                         
                         const maxFrames = {
                             'idle': 3, 'walk': 4, 'jump': 2, 'attack': 3, 'hurt': 2, 'special': 6,
-                            'uppercut': 3, 'low': 3, 'double': 3, 'down': 2
+                            'uppercut': 3, 'low': 3, 'double': 3, 'down': 3, 'getup': 4
                         };
                         
                         const maxFrame = maxFrames[this.animationState] || 1;
@@ -523,7 +701,7 @@
                     // Attaque basse (F)
                     this.comboType = 'low';
                     this.attack();
-                    console.log(`${this.type}: ATTAQUE BASSE!`);
+                    console.log(`🔥 ${this.type}: ATTAQUE BASSE - LOW ATTACK!`);
                 } else if (timeSinceLastAttack < this.comboWindow && timeSinceLastAttack > 50) {
                     // Double frappe (G+G) - détection améliorée
                     this.comboType = 'double';
@@ -655,6 +833,31 @@
                 ctx.strokeStyle = 'white';
                 ctx.strokeRect(barX, barY, barWidth, barHeight);
                 
+                // Debug visuel pour les états spéciaux
+                if (this.isDown) {
+                    ctx.save();
+                    ctx.fillStyle = 'red';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.strokeText(`DOWN! ${Math.ceil(this.downTimer/1000)}s`, this.x + this.width/2, this.y - 25);
+                    ctx.fillText(`DOWN! ${Math.ceil(this.downTimer/1000)}s`, this.x + this.width/2, this.y - 25);
+                    ctx.restore();
+                }
+                
+                if (this.isGettingUp) {
+                    ctx.save();
+                    ctx.fillStyle = 'orange';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.strokeText(`GETTING UP! ${Math.ceil(this.getupTimer/1000)}s`, this.x + this.width/2, this.y - 25);
+                    ctx.fillText(`GETTING UP! ${Math.ceil(this.getupTimer/1000)}s`, this.x + this.width/2, this.y - 25);
+                    ctx.restore();
+                }
+                
                 // Indicateur phase spéciale
                 if (this.isChargingSpecial) {
                     ctx.save();
@@ -696,6 +899,26 @@
                 player.update(deltaTime);
             }
             
+            // Mettre à jour les effets d'impact
+            for (let i = impactEffects.length - 1; i >= 0; i--) {
+                const effect = impactEffects[i];
+                if (!effect.update(deltaTime / 1000)) {
+                    impactEffects.splice(i, 1);
+                }
+            }
+            
+            // Mettre à jour le screen shake
+            if (screenShake.duration > 0) {
+                screenShake.duration -= deltaTime;
+                screenShake.x = (Math.random() - 0.5) * screenShake.intensity;
+                screenShake.y = (Math.random() - 0.5) * screenShake.intensity;
+                
+                if (screenShake.duration <= 0) {
+                    screenShake.x = 0;
+                    screenShake.y = 0;
+                }
+            }
+            
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const projectile = projectiles[i];
                 
@@ -729,19 +952,48 @@
                         p2.takeDamage(damage);
                         p1.hasHit = true;
                         
+                        // Calcul du point d'impact précis (style Tekken)
+                        const impactX = p2.x + p2.width/2; // Centre du receveur
+                        const impactY = p2.y + p2.height/3; // Partie haute du corps
+                        
                         // Effets selon le type de combo
                         if (p1.comboType === 'uppercut') {
                             p2.vy = -400; // Projette vers le haut
                             p2.vx = (p2.x > p1.x ? 200 : -200);
+                            // Effet d'impact critique sur le menton/torse
+                            impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
+                            // Screen shake modéré
+                            screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
                         } else if (p1.comboType === 'low') {
                             // Low attack met l'adversaire au sol !
                             p2.isDown = true;
                             p2.downTimer = p2.downDuration;
                             p2.vy = 0; // Pas de projection verticale
                             p2.vx = (p2.x > p1.x ? 200 : -200); // Petit recul
-                            console.log(`${p2.type}: KNOCKED DOWN!`);
+                            console.log(`🔥 ${p2.type}: KNOCKED DOWN! Timer=${p2.downTimer} - isDown=${p2.isDown}`);
+                            // Effet d'impact knockdown sur les jambes/bas du corps
+                            const lowImpactY = p2.y + (p2.height * 2/3);
+                            impactEffects.push(new ImpactEffect(impactX, lowImpactY, 'knockdown', 800));
+                            // Screen shake intense pour knockdown
+                            screenShake = { x: 0, y: 0, intensity: 12, duration: 500 };
+                        } else if (p1.comboType === 'double') {
+                            p2.vx = (p2.x > p1.x ? knockback * 1.5 : -knockback * 1.5);
+                            // Double impact pour double hit
+                            impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
+                            setTimeout(() => {
+                                impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
+                            }, 150);
+                            // Screen shake double
+                            screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
+                            setTimeout(() => {
+                                screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
+                            }, 150);
                         } else {
                             p2.vx = (p2.x > p1.x ? knockback : -knockback);
+                            // Effet d'impact normal sur le torse
+                            impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
+                            // Screen shake léger
+                            screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
                         }
                         
                         // Affichage du type d'attaque
@@ -820,6 +1072,12 @@
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // Appliquer le screen shake
+            ctx.save();
+            if (screenShake.duration > 0) {
+                ctx.translate(screenShake.x, screenShake.y);
+            }
+            
             if (timeScale < 1.0) {
                 ctx.save();
                 ctx.fillStyle = 'rgba(0, 100, 200, 0.15)';
@@ -849,6 +1107,11 @@
                 player.render(ctx);
             }
             
+            // Rendre les effets d'impact par-dessus tout
+            for (const effect of impactEffects) {
+                effect.render(ctx);
+            }
+            
             if (timeScale < 1.0) {
                 ctx.save();
                 ctx.fillStyle = 'rgba(0, 255, 255, 0.9)';
@@ -860,6 +1123,9 @@
                 ctx.fillText('⚡ SLOW MOTION ⚡', canvas.width / 2, 100);
                 ctx.restore();
             }
+            
+            // Restaurer le contexte du screen shake
+            ctx.restore();
         }
 
         window.addEventListener('keydown', (e) => {

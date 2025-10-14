@@ -97,6 +97,7 @@
             // Sprites spéciaux (fallback vers attack si pas trouvé)
             'special/ninja_special1.png', 'special/ninja_special2.png', 'special/ninja_special3.png',
             'special/ninja_special4.png', 'special/ninja_special5.png', 'special/ninja_special6.png'
+            // Plus besoin de sprite projectile - pure énergie maintenant ! ✨
         ];
         
         // Fonction pour obtenir le chemin correct selon la nouvelle organisation
@@ -309,6 +310,42 @@
                     gradient.addColorStop(1, 'rgba(255, 150, 50, 0)');
                     ctx.fillStyle = gradient;
                     ctx.fillRect(-this.size, -this.size, this.size * 2, this.size * 2);
+                } else if (this.type === 'special_explosion') {
+                    // Effet SPECTACULAIRE pour attaque spéciale ninja !
+                    const progress = 1 - (this.timer / this.duration);
+                    
+                    // Explosion principale avec dégradé arc-en-ciel
+                    const gradient1 = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
+                    gradient1.addColorStop(0, 'rgba(255, 255, 255, 1.0)'); // Centre blanc pur
+                    gradient1.addColorStop(0.2, 'rgba(255, 100, 255, 0.9)'); // Magenta intense
+                    gradient1.addColorStop(0.4, 'rgba(100, 255, 255, 0.7)'); // Cyan brillant
+                    gradient1.addColorStop(0.6, 'rgba(255, 255, 100, 0.5)'); // Jaune électrique
+                    gradient1.addColorStop(0.8, 'rgba(255, 100, 100, 0.3)'); // Rouge énergétique
+                    gradient1.addColorStop(1, 'rgba(100, 100, 255, 0)'); // Bleu qui disparaît
+                    ctx.fillStyle = gradient1;
+                    ctx.fillRect(-this.size, -this.size, this.size * 2, this.size * 2);
+                    
+                    // Cercles d'énergie pulsants
+                    for (let i = 0; i < 4; i++) {
+                        const ringSize = this.size * (0.3 + i * 0.2) * (1 + Math.sin(progress * Math.PI * 4 + i) * 0.1);
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 - i * 0.15})`;
+                        ctx.lineWidth = 4 - i;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, ringSize, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    
+                    // Rayons d'énergie rotatifs
+                    for (let i = 0; i < 16; i++) {
+                        const angle = (i / 16) * Math.PI * 2 + progress * Math.PI * 2;
+                        const length = this.size * (0.8 + Math.sin(progress * Math.PI * 8 + i) * 0.2);
+                        ctx.strokeStyle = `rgba(255, ${200 + Math.sin(angle) * 55}, 255, ${0.7 - (i % 4) * 0.1})`;
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
+                        ctx.stroke();
+                    }
                 } else {
                     // Effet bleu pour coup normal
                     const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
@@ -336,8 +373,8 @@
             constructor(x, y, direction, owner) {
                 this.x = x;
                 this.y = y + 30;
-                this.width = 40;
-                this.height = 20;
+                this.width = 80;  // Plus grand pour vos nouveaux sprites !
+                this.height = 40; // Plus grand pour vos nouveaux sprites !
                 this.direction = direction;
                 this.speed = 500;
                 this.damage = 40;
@@ -345,10 +382,30 @@
                 this.timer = 0;
                 this.life = 3000;
                 this.glowIntensity = 1.0;
+                this.trail = []; // Tableau pour stocker les positions de la traînée
+                this.trailMaxLength = 20; // Traînée MEGA spectaculaire !
             }
             
             update(deltaTime) {
                 const dt = deltaTime / 1000;
+                
+                // Ajouter la position actuelle à la traînée
+                this.trail.push({
+                    x: this.x + this.width / 2,  // Centre du projectile
+                    y: this.y + this.height / 2,
+                    alpha: 1.0  // Transparence initiale
+                });
+                
+                // Limiter la longueur de la traînée
+                if (this.trail.length > this.trailMaxLength) {
+                    this.trail.shift();  // Supprimer le plus ancien
+                }
+                
+                // Diminuer la transparence des anciennes positions
+                for (let i = 0; i < this.trail.length; i++) {
+                    this.trail[i].alpha = (i + 1) / this.trail.length;
+                }
+                
                 this.x += this.speed * this.direction * dt;
                 this.timer += deltaTime;
                 this.glowIntensity = 0.5 + 0.5 * Math.sin(this.timer * 0.01);
@@ -364,13 +421,81 @@
             }
             
             render(ctx) {
+                // === TRAÎNÉE SPECTACULAIRE === (derrière le projectile)
                 ctx.save();
-                ctx.shadowColor = 'cyan';
-                ctx.shadowBlur = 20 * this.glowIntensity;
-                ctx.fillStyle = `rgba(0, 255, 255, ${0.8 * this.glowIntensity})`;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
+                for (let i = 0; i < this.trail.length - 1; i++) {
+                    const current = this.trail[i];
+                    const progress = current.alpha;
+                    
+                    // Taille variable de la traînée (plus grosse au début)
+                    const size = (progress * 25) + 8;
+                    const alpha = progress * 0.8;
+                    
+                    // Effet de double cercle pour plus de profondeur
+                    ctx.globalAlpha = alpha;
+                    
+                    // Cercle extérieur (halo)
+                    ctx.fillStyle = `rgba(0, 150, 255, ${alpha * 0.3})`;
+                    ctx.shadowColor = 'cyan';
+                    ctx.shadowBlur = 20;
+                    ctx.beginPath();
+                    ctx.arc(current.x, current.y, size * 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Cercle intérieur (cœur brillant)
+                    ctx.fillStyle = `rgba(100, 255, 255, ${alpha})`;
+                    ctx.shadowBlur = 15;
+                    ctx.beginPath();
+                    ctx.arc(current.x, current.y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Point central ultra-brillant
+                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                    ctx.shadowBlur = 5;
+                    ctx.beginPath();
+                    ctx.arc(current.x, current.y, size * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+                
+                // === PROJECTILE PURE ÉNERGIE === (point focal de la traînée)
+                ctx.save();
+                
+                // NOYAU CENTRAL ULTRA-BRILLANT
+                const centerX = this.x + this.width / 2;
+                const centerY = this.y + this.height / 2;
+                
+                // Halo externe pulsant
+                const pulseSize = 35 + Math.sin(this.timer * 0.01) * 10;
+                ctx.shadowColor = 'rgba(0, 255, 255, 0.8)';
+                ctx.shadowBlur = 50 * this.glowIntensity;
+                ctx.fillStyle = `rgba(0, 150, 255, ${0.2 * this.glowIntensity})`;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, pulseSize, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Noyau principal
+                ctx.shadowBlur = 30;
+                ctx.fillStyle = `rgba(50, 255, 255, ${0.8 * this.glowIntensity})`;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, 20, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Cœur ultra-brillant
+                ctx.shadowColor = 'white';
+                ctx.shadowBlur = 20;
                 ctx.fillStyle = `rgba(255, 255, 255, ${this.glowIntensity})`;
-                ctx.fillRect(this.x + 5, this.y + 5, this.width - 10, this.height - 10);
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Point central pur
+                ctx.shadowBlur = 10;
+                ctx.fillStyle = `rgba(255, 255, 255, 1.0)`;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+                ctx.fill();
+                
                 ctx.restore();
             }
         }
@@ -931,6 +1056,29 @@
                     if (projectile.owner !== player && projectile.checkCollision(player)) {
                         player.takeDamage(projectile.damage);
                         player.vx = projectile.direction * 200;
+                        
+                        // Effets d'impact spectaculaires pour l'attaque spéciale !
+                        const impactX = player.x + player.width/2;
+                        const impactY = player.y + player.height/2;
+                        
+                        // Explosion principale massive
+                        impactEffects.push(new ImpactEffect(impactX, impactY, 'special_explosion', 1000));
+                        
+                        // Multiples impacts secondaires pour effet dramatique
+                        setTimeout(() => {
+                            impactEffects.push(new ImpactEffect(impactX - 30, impactY - 20, 'critical', 600));
+                            impactEffects.push(new ImpactEffect(impactX + 25, impactY + 15, 'critical', 700));
+                        }, 100);
+                        
+                        setTimeout(() => {
+                            impactEffects.push(new ImpactEffect(impactX - 15, impactY + 30, 'hit', 400));
+                            impactEffects.push(new ImpactEffect(impactX + 20, impactY - 25, 'hit', 500));
+                        }, 250);
+                        
+                        // Screen shake ultra intense
+                        screenShake = { x: 0, y: 0, intensity: 20, duration: 800 };
+                        
+                        console.log(`💥 SPECIAL IMPACT on ${player.type}!`);
                         projectiles.splice(i, 1);
                         break;
                     }

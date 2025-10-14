@@ -1,0 +1,614 @@
+<!DOCTYPE html><!DOCTYPE html>
+
+<html lang="fr"><html>
+
+<head><head>
+
+    <meta charset="UTF-8">    <title>Test Debug</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <style>
+
+    <title>DEBUG - Test Système Spécial</title>        body { background: #333; color: white; font-family: Arial; padding: 20px; }
+
+    <style>        canvas { border: 2px solid #666; background: #87CEEB; }
+
+        body {        #log { margin-top: 20px; }
+
+            margin: 0;    </style>
+
+            padding: 0;</head>
+
+            background: linear-gradient(135deg, #1a1a2e, #16213e);<body>
+
+            color: white;    <h1>Test Debug du Jeu</h1>
+
+            font-family: 'Courier New', monospace;    <canvas id="canvas" width="800" height="400"></canvas>
+
+        }    <div id="log">
+
+                <h3>Log:</h3>
+
+        #gameContainer {        <div id="logContent"></div>
+
+            display: flex;    </div>
+
+            flex-direction: column;
+
+            align-items: center;    <script>
+
+            padding: 20px;        function log(msg) {
+
+        }            console.log(msg);
+
+                    document.getElementById('logContent').innerHTML += '<div>' + msg + '</div>';
+
+        canvas {        }
+
+            border: 3px solid #4a90e2;
+
+            border-radius: 10px;        log('Début du test...');
+
+            box-shadow: 0 0 30px rgba(74, 144, 226, 0.5);
+
+        }        try {
+
+                    // Test 1: Canvas
+
+        #controls, #gameInfo {            const canvas = document.getElementById('canvas');
+
+            margin: 10px;            const ctx = canvas.getContext('2d');
+
+            padding: 15px;            log('✓ Canvas créé');
+
+            background: rgba(0, 0, 0, 0.7);
+
+            border-radius: 10px;            // Test 2: Dessiner quelque chose de simple
+
+            border: 1px solid #4a90e2;            ctx.fillStyle = 'red';
+
+        }            ctx.fillRect(50, 50, 100, 100);
+
+    </style>            log('✓ Rectangle rouge dessiné');
+
+</head>
+
+<body>            // Test 3: Charger utils.js
+
+    <div id="gameContainer">            const script1 = document.createElement('script');
+
+        <canvas id="gameCanvas" width="1200" height="800"></canvas>            script1.src = 'js/utils.js';
+
+                    script1.onload = () => {
+
+        <div id="controls">                log('✓ utils.js chargé');
+
+            <strong>🔧 MODE DEBUG - RECTANGLES COLORÉS</strong><br>                
+
+            Joueur 1 (Bleu): WASD + G + <span style="color: cyan;">Shift+G (Technique Spéciale)</span><br>                // Test 4: Tester Vector2
+
+            Joueur 2 (Rouge): ↑↓←→ + L + <span style="color: cyan;">Shift+L (Technique Spéciale)</span><br>                try {
+
+            R: Redémarrer | Ce mode teste le système sans sprites                    const vec = new Vector2(10, 20);
+
+        </div>                    log('✓ Vector2 fonctionne: ' + vec.x + ', ' + vec.y);
+
+                        } catch (e) {
+
+        <div id="gameInfo">                    log('✗ Erreur Vector2: ' + e.message);
+
+            <div>🔋 Santé P1: <span id="p1Health">100</span>%</div>                }
+
+            <div>🔋 Santé P2: <span id="p2Health">100</span>%</div>
+
+            <div>⚡ Phase: <span id="specialPhase">Normal</span></div>                // Test 5: Charger assets.js
+
+        </div>                const script2 = document.createElement('script');
+
+    </div>                script2.src = 'js/assets.js';
+
+                script2.onload = () => {
+
+    <script>                    log('✓ assets.js chargé');
+
+        // Variables globales                    
+
+        const canvas = document.getElementById('gameCanvas');                    // Test 6: Créer AssetManager
+
+        const ctx = canvas.getContext('2d');                    try {
+
+        let gameRunning = true;                        const assetManager = new AssetManager();
+
+        let keys = {};                        log('✓ AssetManager créé');
+
+        let players = [];                        
+
+        let projectiles = [];                        // Test 7: Charger une image
+
+        let timeScale = 1.0;                        assetManager.loadImage('ninja_idle', './assets/characters/ninja_idle.png')
+
+                                    .then(img => {
+
+        // Classe Projectile DEBUG                                log('✓ Image ninja chargée: ' + img.width + 'x' + img.height);
+
+        class DebugProjectile {                                
+
+            constructor(x, y, direction, owner) {                                // Test 8: Dessiner l'image
+
+                this.x = x;                                ctx.drawImage(img, 200, 50);
+
+                this.y = y + 30;                                log('✓ Image ninja dessinée à 200,50');
+
+                this.width = 40;                            })
+
+                this.height = 20;                            .catch(err => {
+
+                this.direction = direction;                                log('✗ Erreur chargement image: ' + err);
+
+                this.speed = 500;                            });
+
+                this.damage = 40;                    } catch (e) {
+
+                this.owner = owner;                        log('✗ Erreur AssetManager: ' + e.message);
+
+                this.timer = 0;                    }
+
+                this.life = 3000;                };
+
+                this.glowIntensity = 1.0;                script2.onerror = () => log('✗ Erreur chargement assets.js');
+
+            }                document.head.appendChild(script2);
+
+                        };
+
+            update(deltaTime) {            script1.onerror = () => log('✗ Erreur chargement utils.js');
+
+                const dt = deltaTime / 1000;            document.head.appendChild(script1);
+
+                this.x += this.speed * this.direction * dt;
+
+                this.timer += deltaTime;        } catch (e) {
+
+                this.glowIntensity = 0.5 + 0.5 * Math.sin(this.timer * 0.01);            log('✗ Erreur générale: ' + e.message);
+
+                        }
+
+                return !(this.x < -100 || this.x > 1300 || this.timer > this.life);    </script>
+
+            }</body>
+
+            </html>
+            checkCollision(player) {
+                return this.x < player.x + player.width &&
+                       this.x + this.width > player.x &&
+                       this.y < player.y + player.height &&
+                       this.y + this.height > player.y;
+            }
+            
+            render(ctx) {
+                ctx.save();
+                ctx.shadowColor = 'cyan';
+                ctx.shadowBlur = 20 * this.glowIntensity;
+                ctx.fillStyle = `rgba(0, 255, 255, ${0.8 * this.glowIntensity})`;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.glowIntensity})`;
+                ctx.fillRect(this.x + 5, this.y + 5, this.width - 10, this.height - 10);
+                ctx.restore();
+            }
+        }
+
+        // Classe joueur DEBUG - FONCTIONNE AVEC RECTANGLES
+        class DebugPlayer {
+            constructor(x, y, type, isPlayer1) {
+                this.x = x;
+                this.y = y;
+                this.width = 80;
+                this.height = 80;
+                this.type = type;
+                this.isPlayer1 = isPlayer1;
+                this.health = 100;
+                this.maxHealth = 100;
+                this.facingLeft = false;
+                
+                // Animation
+                this.animationState = 'idle';
+                this.animationFrame = 1;
+                
+                // Physique
+                this.vx = 0;
+                this.vy = 0;
+                this.onGround = false;
+                this.speed = 300;
+                this.jumpPower = 500;
+                this.gravity = 1500;
+                
+                // Combat
+                this.isAttacking = false;
+                this.attackTimer = 0;
+                this.attackDuration = 1000;
+                this.hasHit = false;
+                
+                // Système spécial cinématographique
+                this.isChargingSpecial = false;
+                this.specialPhase = 0;
+                this.specialTimer = 0;
+                this.specialPhaseDurations = [0, 300, 300, 300, 200, 250, 250];
+                this.specialCooldown = 0;
+                this.specialCooldownDuration = 3000;
+                
+                // Couleurs pour debug
+                this.baseColor = isPlayer1 ? '#0066ff' : '#ff3300';
+                this.currentColor = this.baseColor;
+            }
+            
+            chargeSpecialAttack() {
+                if (this.specialCooldown <= 0 && !this.isChargingSpecial) {
+                    this.isChargingSpecial = true;
+                    this.specialPhase = 1;
+                    this.specialTimer = 0;
+                    this.animationState = 'special';
+                    this.updatePhaseDisplay();
+                    console.log(`${this.type} : Début technique spéciale !`);
+                }
+            }
+            
+            updatePhaseDisplay() {
+                const phaseNames = ['Normal', 'Concentration', 'Accumulation', 'Charge Max', 'LANCEMENT!', 'Récupération', 'Fin'];
+                document.getElementById('specialPhase').textContent = `${this.type} - ${phaseNames[this.specialPhase]}`;
+            }
+            
+            executeSpecialAttack() {
+                const projectileX = this.facingLeft ? this.x - 40 : this.x + this.width;
+                const projectileY = this.y;
+                const direction = this.facingLeft ? -1 : 1;
+                
+                const projectile = new DebugProjectile(projectileX, projectileY, direction, this);
+                projectiles.push(projectile);
+                
+                // Déclencher slow motion
+                timeScale = 0.3;
+                console.log(`${this.type} : HADOKEN lancé ! Slow motion activé !`);
+                
+                setTimeout(() => { 
+                    timeScale = 1.0; 
+                    console.log("Retour vitesse normale");
+                }, 1000);
+            }
+
+            update(deltaTime) {
+                const dt = deltaTime / 1000;
+                const scaledDeltaTime = deltaTime * timeScale;
+                const scaledDt = dt * timeScale;
+                
+                // Cooldown
+                if (this.specialCooldown > 0) {
+                    this.specialCooldown -= deltaTime;
+                }
+                
+                // SYSTÈME SPÉCIAL - 6 PHASES
+                if (this.isChargingSpecial) {
+                    this.specialTimer += deltaTime; // Pas affecté par le slow motion
+                    
+                    const currentPhaseDuration = this.specialPhaseDurations[this.specialPhase];
+                    
+                    if (this.specialTimer >= currentPhaseDuration) {
+                        this.specialTimer = 0;
+                        this.specialPhase++;
+                        
+                        if (this.specialPhase === 4) {
+                            // Phase 4 : LANCEMENT !
+                            this.executeSpecialAttack();
+                        } else if (this.specialPhase > 6) {
+                            // Fin de séquence
+                            this.isChargingSpecial = false;
+                            this.specialPhase = 0;
+                            this.specialCooldown = this.specialCooldownDuration;
+                            this.animationState = 'idle';
+                            console.log(`${this.type} : Technique terminée`);
+                        }
+                        
+                        this.updatePhaseDisplay();
+                    }
+                    
+                    // Couleur progressive selon la phase
+                    const intensity = this.specialPhase / 6;
+                    if (this.isPlayer1) {
+                        this.currentColor = `rgba(0, ${100 + 155*intensity}, 255, ${0.5 + 0.5*intensity})`;
+                    } else {
+                        this.currentColor = `rgba(255, ${100*intensity}, 0, ${0.5 + 0.5*intensity})`;
+                    }
+                    
+                    // Pas de mouvement pendant technique spéciale
+                    return;
+                } else {
+                    this.currentColor = this.baseColor;
+                }
+                
+                // MOUVEMENT NORMAL
+                let isMoving = false;
+                
+                if (this.isPlayer1) {
+                    // Joueur 1 : WASD
+                    if (keys['KeyA']) {
+                        this.vx = -this.speed;
+                        this.facingLeft = true;
+                        isMoving = true;
+                    } else if (keys['KeyD']) {
+                        this.vx = this.speed;
+                        this.facingLeft = false;
+                        isMoving = true;
+                    } else {
+                        this.vx = 0;
+                    }
+                    
+                    if (keys['KeyW'] && this.onGround) {
+                        this.vy = -this.jumpPower;
+                        this.onGround = false;
+                    }
+                    
+                    if (keys['KeyG'] && !this.isAttacking) {
+                        this.attack();
+                    }
+                } else {
+                    // Joueur 2 : Flèches
+                    if (keys['ArrowLeft']) {
+                        this.vx = -this.speed;
+                        this.facingLeft = true;
+                        isMoving = true;
+                    } else if (keys['ArrowRight']) {
+                        this.vx = this.speed;
+                        this.facingLeft = false;
+                        isMoving = true;
+                    } else {
+                        this.vx = 0;
+                    }
+                    
+                    if (keys['ArrowUp'] && this.onGround) {
+                        this.vy = -this.jumpPower;
+                        this.onGround = false;
+                    }
+                    
+                    if (keys['KeyL'] && !this.isAttacking) {
+                        this.attack();
+                    }
+                }
+                
+                // PHYSIQUE
+                this.vy += this.gravity * scaledDt;
+                this.x += this.vx * scaledDt;
+                this.y += this.vy * scaledDt;
+                
+                // Sol
+                if (this.y >= 620) {
+                    this.y = 620;
+                    this.vy = 0;
+                    this.onGround = true;
+                }
+                
+                // Limites écran
+                this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
+                
+                // Combat normal
+                if (this.isAttacking) {
+                    this.attackTimer += scaledDeltaTime;
+                    if (this.attackTimer >= this.attackDuration) {
+                        this.isAttacking = false;
+                        this.attackTimer = 0;
+                        this.hasHit = false;
+                    }
+                }
+            }
+            
+            attack() {
+                this.isAttacking = true;
+                this.attackTimer = 0;
+                this.hasHit = false;
+                console.log(`${this.type} attaque normale !`);
+            }
+            
+            takeDamage(amount) {
+                this.health -= amount;
+                this.health = Math.max(0, this.health);
+                console.log(`${this.type} perd ${amount} HP`);
+            }
+            
+            render(ctx) {
+                // Corps principal (rectangle coloré)
+                ctx.fillStyle = this.currentColor;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Yeux pour indiquer la direction
+                ctx.fillStyle = 'white';
+                const eyeX = this.facingLeft ? this.x + 15 : this.x + this.width - 25;
+                ctx.fillRect(eyeX, this.y + 20, 10, 10);
+                
+                // Barre de vie
+                const barWidth = 60;
+                const barHeight = 8;
+                const barX = this.x + (this.width - barWidth) / 2;
+                const barY = this.y - 15;
+                
+                ctx.fillStyle = 'red';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+                
+                ctx.fillStyle = 'green';
+                const healthWidth = (this.health / this.maxHealth) * barWidth;
+                ctx.fillRect(barX, barY, healthWidth, barHeight);
+                
+                ctx.strokeStyle = 'white';
+                ctx.strokeRect(barX, barY, barWidth, barHeight);
+                
+                // Zone d'attaque
+                if (this.isAttacking) {
+                    ctx.fillStyle = 'rgba(255, 255, 0, 0.6)';
+                    const attackX = this.facingLeft ? this.x - 30 : this.x + this.width;
+                    ctx.fillRect(attackX, this.y + 20, 30, 40);
+                }
+                
+                // Indicateur de phase spéciale
+                if (this.isChargingSpecial) {
+                    ctx.save();
+                    ctx.fillStyle = 'cyan';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`Phase ${this.specialPhase}`, this.x + this.width/2, this.y - 35);
+                    
+                    // Aura de charge
+                    ctx.strokeStyle = 'cyan';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(this.x - 5, this.y - 5, this.width + 10, this.height + 10);
+                    ctx.restore();
+                }
+            }
+        }
+
+        function init() {
+            console.log("🔧 MODE DEBUG : Initialisation avec rectangles colorés");
+            
+            players = [
+                new DebugPlayer(200, 620, 'Ninja Bleu', true),
+                new DebugPlayer(900, 620, 'Ninja Rouge', false)
+            ];
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        let lastTime = 0;
+        function gameLoop(currentTime) {
+            if (!gameRunning) return;
+            
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            
+            update(deltaTime);
+            render();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(deltaTime) {
+            // Mise à jour joueurs
+            for (const player of players) {
+                player.update(deltaTime);
+            }
+            
+            // Mise à jour projectiles
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const projectile = projectiles[i];
+                
+                if (!projectile.update(deltaTime)) {
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+                
+                // Collisions
+                for (const player of players) {
+                    if (projectile.owner !== player && projectile.checkCollision(player)) {
+                        player.takeDamage(projectile.damage);
+                        player.vx = projectile.direction * 200; // Knockback
+                        projectiles.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+            
+            // Combat corps à corps
+            const [p1, p2] = players;
+            const distance = Math.abs(p1.x - p2.x);
+            
+            if (distance < 100) {
+                if (p1.isAttacking && !p1.hasHit) {
+                    p2.takeDamage(20);
+                    p1.hasHit = true;
+                    p2.vx = p2.x > p1.x ? 300 : -300;
+                }
+                if (p2.isAttacking && !p2.hasHit) {
+                    p1.takeDamage(20);
+                    p2.hasHit = true;
+                    p1.vx = p1.x > p2.x ? 300 : -300;
+                }
+            }
+            
+            // Interface
+            document.getElementById('p1Health').textContent = Math.round(p1.health);
+            document.getElementById('p2Health').textContent = Math.round(p2.health);
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Effet slow motion
+            if (timeScale < 1.0) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(0, 100, 200, 0.2)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
+            
+            // Arrière-plan
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#98FB98');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Sol
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, 700, canvas.width, 100);
+            
+            // Plateformes
+            ctx.fillStyle = '#654321';
+            ctx.fillRect(300, 550, 200, 20);
+            ctx.fillRect(700, 400, 200, 20);
+            ctx.fillRect(500, 300, 200, 20);
+            
+            // Projectiles
+            for (const projectile of projectiles) {
+                projectile.render(ctx);
+            }
+            
+            // Joueurs
+            for (const player of players) {
+                player.render(ctx);
+            }
+            
+            // Effet slow motion global
+            if (timeScale < 1.0) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.9)';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.strokeText('⚡ SLOW MOTION DEBUG ⚡', canvas.width / 2, 100);
+                ctx.fillText('⚡ SLOW MOTION DEBUG ⚡', canvas.width / 2, 100);
+                ctx.restore();
+            }
+        }
+
+        // Événements
+        window.addEventListener('load', init);
+        
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            // TECHNIQUES SPÉCIALES
+            if (e.shiftKey && e.code === 'KeyG') {
+                e.preventDefault();
+                players[0].chargeSpecialAttack();
+            }
+            if (e.shiftKey && e.code === 'KeyL') {
+                e.preventDefault();
+                players[1].chargeSpecialAttack();
+            }
+            
+            if (e.code === 'KeyR') {
+                location.reload();
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+    </script>
+</body>
+</html>

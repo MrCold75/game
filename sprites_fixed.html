@@ -557,12 +557,12 @@
                 // Système de chute au sol
                 this.isDown = false;
                 this.downTimer = 0;
-                this.downDuration = 2000; // 2 secondes au sol
+                this.downDuration = 500; // 0.5 seconde au sol (encore réduit de moitié)
                 
                 // Système de récupération
                 this.isGettingUp = false;
                 this.getupTimer = 0;
-                this.getupDuration = 1200; // 1.2 secondes pour se relever
+                this.getupDuration = 900; // 0.9 secondes pour se relever (plus réaliste)
             }
             
             chargeSpecialAttack() {
@@ -697,6 +697,18 @@
                 }
                 
                 this.vy += this.gravity * scaledDt;
+                
+                // Appliquer la friction horizontale (surtout au sol)
+                if (this.onGround) {
+                    const friction = this.isDown ? 0.85 : 0.92; // Plus de friction quand knockdown
+                    this.vx *= friction;
+                    
+                    // Arrêter complètement si la vitesse devient très faible
+                    if (Math.abs(this.vx) < 5) {
+                        this.vx = 0;
+                    }
+                }
+                
                 this.x += this.vx * scaledDt;
                 this.y += this.vy * scaledDt;
                 
@@ -892,11 +904,15 @@
                 this.health -= amount;
                 this.health = Math.max(0, this.health);
                 
-                // État de hurt plus long et visible
-                this.animationState = 'hurt';
-                this.animationFrame = 1;
-                this.hurtTimer = 800; // Durée d'état hurt (800ms)
-                this.isHurt = true;
+                // Ne pas forcer l'état hurt si on est déjà knockdown
+                // Le knockdown aura priorité sur l'animation hurt
+                if (!this.isDown) {
+                    // État de hurt plus long et visible
+                    this.animationState = 'hurt';
+                    this.animationFrame = 1;
+                    this.hurtTimer = 800; // Durée d'état hurt (800ms)
+                    this.isHurt = true;
+                }
                 
                 // Interruption des actions en cours
                 this.isAttacking = false;
@@ -909,11 +925,22 @@
                 
                 if (sprite) {
                     ctx.save();
+                    
+                    // Taille standardisée pour tous les sprites ninja
+                    let renderWidth = this.width;
+                    let renderHeight = this.height;
+                    
+                    if (this.type.toLowerCase().includes('ninja')) {
+                        // Forcer une taille constante pour tous les sprites ninja
+                        renderWidth = 80;  // Taille fixe largeur
+                        renderHeight = 80; // Taille fixe hauteur
+                    }
+                    
                     if (this.facingLeft) {
                         ctx.scale(-1, 1);
-                        ctx.drawImage(sprite, -this.x - this.width, this.y, this.width, this.height);
+                        ctx.drawImage(sprite, -this.x - renderWidth, this.y, renderWidth, renderHeight);
                     } else {
-                        ctx.drawImage(sprite, this.x, this.y, this.width, this.height);
+                        ctx.drawImage(sprite, this.x, this.y, renderWidth, renderHeight);
                     }
                     ctx.restore();
                 } else {
@@ -1055,7 +1082,7 @@
                 for (const player of players) {
                     if (projectile.owner !== player && projectile.checkCollision(player)) {
                         player.takeDamage(projectile.damage);
-                        player.vx = projectile.direction * 200;
+                        player.vx = projectile.direction * 120; // Réduit de 200 à 120
                         
                         // Effets d'impact spectaculaires pour l'attaque spéciale !
                         const impactX = player.x + player.width/2;
@@ -1097,35 +1124,39 @@
                         let damage = calculateComboDamage(p1);
                         let knockback = calculateComboKnockback(p1);
                         
-                        p2.takeDamage(damage);
-                        p1.hasHit = true;
-                        
                         // Calcul du point d'impact précis (style Tekken)
                         const impactX = p2.x + p2.width/2; // Centre du receveur
                         const impactY = p2.y + p2.height/3; // Partie haute du corps
                         
-                        // Effets selon le type de combo
-                        if (p1.comboType === 'uppercut') {
-                            p2.vy = -400; // Projette vers le haut
-                            p2.vx = (p2.x > p1.x ? 200 : -200);
-                            // Effet d'impact critique sur le menton/torse
-                            impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
-                            // Screen shake modéré
-                            screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
-                        } else if (p1.comboType === 'low') {
+                        // Appliquer les effets spéciaux AVANT takeDamage pour éviter animation double
+                        if (p1.comboType === 'low') {
                             // Low attack met l'adversaire au sol !
                             p2.isDown = true;
                             p2.downTimer = p2.downDuration;
                             p2.vy = 0; // Pas de projection verticale
-                            p2.vx = (p2.x > p1.x ? 200 : -200); // Petit recul
+                            p2.vx = (p2.x > p1.x ? 100 : -100); // Réduit de 200 à 100 pour knockdown
                             console.log(`🔥 ${p2.type}: KNOCKED DOWN! Timer=${p2.downTimer} - isDown=${p2.isDown}`);
                             // Effet d'impact knockdown sur les jambes/bas du corps
                             const lowImpactY = p2.y + (p2.height * 2/3);
                             impactEffects.push(new ImpactEffect(impactX, lowImpactY, 'knockdown', 800));
                             // Screen shake intense pour knockdown
                             screenShake = { x: 0, y: 0, intensity: 12, duration: 500 };
+                        }
+                        
+                        // Appliquer les dégâts APRÈS les effets spéciaux
+                        p2.takeDamage(damage);
+                        p1.hasHit = true;
+                        
+                        // Effets selon le type de combo (sauf low qui est déjà traité)
+                        if (p1.comboType === 'uppercut') {
+                            p2.vy = -400; // Projette vers le haut
+                            p2.vx = (p2.x > p1.x ? 120 : -120); // Réduit de 200 à 120
+                            // Effet d'impact critique sur le menton/torse
+                            impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
+                            // Screen shake modéré
+                            screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
                         } else if (p1.comboType === 'double') {
-                            p2.vx = (p2.x > p1.x ? knockback * 1.5 : -knockback * 1.5);
+                            p2.vx = (p2.x > p1.x ? knockback * 1.2 : -knockback * 1.2); // Réduit de 1.5 à 1.2
                             // Double impact pour double hit
                             impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
                             setTimeout(() => {
@@ -1156,22 +1187,55 @@
                         let damage = calculateComboDamage(p2);
                         let knockback = calculateComboKnockback(p2);
                         
-                        p1.takeDamage(damage);
-                        p2.hasHit = true;
+                        // Calcul du point d'impact précis (style Tekken)
+                        const impactX = p1.x + p1.width/2; // Centre du receveur
+                        const impactY = p1.y + p1.height/3; // Partie haute du corps
                         
-                        // Effets selon le type de combo
-                        if (p2.comboType === 'uppercut') {
-                            p1.vy = -400; // Projette vers le haut
-                            p1.vx = (p1.x > p2.x ? 200 : -200);
-                        } else if (p2.comboType === 'low') {
+                        // Appliquer les effets spéciaux AVANT takeDamage pour éviter animation double
+                        if (p2.comboType === 'low') {
                             // Low attack met l'adversaire au sol !
                             p1.isDown = true;
                             p1.downTimer = p1.downDuration;
                             p1.vy = 0; // Pas de projection verticale
-                            p1.vx = (p1.x > p2.x ? 200 : -200); // Petit recul
+                            p1.vx = (p1.x > p2.x ? 100 : -100); // Réduit de 200 à 100 pour knockdown
                             console.log(`${p1.type}: KNOCKED DOWN!`);
+                            // Effet d'impact knockdown sur les jambes/bas du corps
+                            const lowImpactY = p1.y + (p1.height * 2/3);
+                            impactEffects.push(new ImpactEffect(impactX, lowImpactY, 'knockdown', 800));
+                            // Screen shake intense pour knockdown
+                            screenShake = { x: 0, y: 0, intensity: 12, duration: 500 };
+                        }
+                        
+                        // Appliquer les dégâts APRÈS les effets spéciaux
+                        p1.takeDamage(damage);
+                        p2.hasHit = true;
+                        
+                        // Effets selon le type de combo (sauf low qui est déjà traité)
+                        if (p2.comboType === 'uppercut') {
+                            p1.vy = -400; // Projette vers le haut
+                            p1.vx = (p1.x > p2.x ? 120 : -120); // Réduit de 200 à 120
+                            // Effet d'impact critique sur le menton/torse
+                            impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
+                            // Screen shake modéré
+                            screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
+                        } else if (p2.comboType === 'double') {
+                            p1.vx = (p1.x > p2.x ? knockback * 1.2 : -knockback * 1.2); // Réduit de 1.5 à 1.2
+                            // Double impact pour double hit
+                            impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
+                            setTimeout(() => {
+                                impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
+                            }, 150);
+                            // Screen shake double
+                            screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
+                            setTimeout(() => {
+                                screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
+                            }, 150);
                         } else {
                             p1.vx = (p1.x > p2.x ? knockback : -knockback);
+                            // Effet d'impact normal sur le torse
+                            impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
+                            // Screen shake léger
+                            screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
                         }
                         
                         // Affichage du type d'attaque

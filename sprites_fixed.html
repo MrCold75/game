@@ -47,10 +47,13 @@
         <canvas id="gameCanvas" width="1200" height="800" style="display: none;"></canvas>
         
         <div id="controls" style="display: none;">
-            <strong>🎮 Jump Ultimate Stars - SYSTÈME DE COMBOS</strong><br>
-            Joueur 1: WASD + G (attaque) + U (uppercut) + F (attaque basse) + <span style="color: cyan;">Shift+G (Technique Spéciale)</span><br>
-            Joueur 2: ↑↓←→ + L (attaque) + U (uppercut) + F (attaque basse) + <span style="color: cyan;">Shift+L (Technique Spéciale)</span><br>
+            <strong>🎮 Jump Ultimate Stars - SYSTÈME DE COMBOS + DASH & GARDE</strong><br>
+            <span style="color: gold;">Joueur 1:</span> WASD + G (attaque) + U (uppercut) + F (attaque basse) + <span style="color: cyan;">Shift+G (Technique Spéciale)</span><br>
+            <span style="color: gold;">Nouvelles commandes P1:</span> S (garde) + Q (dash gauche) + E (dash droite)<br>
+            <span style="color: lime;">Joueur 2:</span> ↑↓←→ + L (attaque) + U (uppercut) + F (attaque basse) + <span style="color: cyan;">Shift+L (Technique Spéciale)</span><br>
+            <span style="color: lime;">Nouvelles commandes P2:</span> ↓ (garde) + 0 (dash gauche) + Entrée (dash droite)<br>
             <span style="color: gold;">⚡ COMBOS: G+G/L+L (double frappe) | U (uppercut) | F (attaque basse)</span><br>
+            <span style="color: cyan;">🛡️ GARDE: Bloque les attaques frontales (20% dégâts) | ⚡ DASH: Mouvement rapide avec cooldown</span><br>
             R: Redémarrer | P: Pause
         </div>
         
@@ -94,6 +97,10 @@
             // Sprites de knockdown et relever
             'ninja_down1.png', 'ninja_down2.png', 'ninja_down3.png',
             'ninja_getup1.png', 'ninja_getup2.png', 'ninja_getup3.png', 'ninja_getup4.png',
+            // Sprites de dash
+            'ninja_dash1.png', 'ninja_dash2.png', 'ninja_dash3.png',
+            // Sprites de shield/garde
+            'ninja_shield1.png', 'ninja_shield2.png', 'ninja_shield3.png',
             // Sprites spéciaux (fallback vers attack si pas trouvé)
             'special/ninja_special1.png', 'special/ninja_special2.png', 'special/ninja_special3.png',
             'special/ninja_special4.png', 'special/ninja_special5.png', 'special/ninja_special6.png'
@@ -117,7 +124,9 @@
                 'low': 'special',
                 'double': 'special',
                 'down': 'special',
-                'getup': 'special'
+                'getup': 'special',
+                'dash': 'dash',
+                'shield': 'shield'
             };
             
             // Extraire l'action de base (sans le numéro)
@@ -346,6 +355,21 @@
                         ctx.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
                         ctx.stroke();
                     }
+                } else if (this.type === 'blocked') {
+                    // Effet cyan pour attaque bloquée
+                    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
+                    gradient.addColorStop(0, 'rgba(0, 255, 255, 0.8)');
+                    gradient.addColorStop(0.5, 'rgba(100, 255, 255, 0.4)');
+                    gradient.addColorStop(1, 'rgba(150, 255, 255, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(-this.size, -this.size, this.size * 2, this.size * 2);
+                    
+                    // Effet de bouclier
+                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.9)';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size * 0.7, 0, Math.PI * 2);
+                    ctx.stroke();
                 } else {
                     // Effet bleu pour coup normal
                     const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
@@ -563,6 +587,21 @@
                 this.isGettingUp = false;
                 this.getupTimer = 0;
                 this.getupDuration = 900; // 0.9 secondes pour se relever (plus réaliste)
+                
+                // Système de dash
+                this.isDashing = false;
+                this.dashTimer = 0;
+                this.dashDuration = 400; // 0.4 secondes de dash (plus long et jouable)
+                this.dashSpeed = 500; // Vitesse du dash (un peu réduite)
+                this.dashCooldown = 0;
+                this.dashCooldownDuration = 1000; // 1 seconde entre chaque dash
+                this.dashDirection = 0; // -1 gauche, 1 droite
+                
+                // Système de garde
+                this.isBlocking = false;
+                this.blockStun = 0;
+                this.blockStunDuration = 300; // 0.3 secondes de stun après avoir bloqué
+                this.blockDirection = 0; // Direction de la garde
             }
             
             chargeSpecialAttack() {
@@ -594,6 +633,56 @@
                 
                 setTimeout(() => { timeScale = 1.0; }, 1000);
             }
+            
+            // Système de dash
+            startDash(direction) {
+                if (this.dashCooldown <= 0 && !this.isDashing && !this.isAttacking && !this.isHurt && !this.isDown) {
+                    this.isDashing = true;
+                    this.dashTimer = 0;
+                    this.dashDirection = direction;
+                    this.dashCooldown = this.dashCooldownDuration;
+                    this.animationState = 'dash'; // Utilise l'animation de dash spécifique
+                    this.animationFrame = 1; // Commencer à la frame 1
+                    console.log(`${this.type} : Dash ${direction > 0 ? 'droite' : 'gauche'} !`);
+                }
+            }
+            
+            // Système de garde
+            startBlocking(direction) {
+                if (!this.isAttacking && !this.isHurt && !this.isDown && !this.isDashing && this.blockStun <= 0) {
+                    this.isBlocking = true;
+                    this.blockDirection = direction;
+                    this.animationState = 'shield'; // Utilise l'animation de shield spécifique
+                    this.animationFrame = 1; // Commencer à la frame 1
+                }
+            }
+            
+            stopBlocking() {
+                this.isBlocking = false;
+            }
+            
+            // Obtenir la vitesse d'animation selon l'état actuel
+            getCurrentFrameSpeed() {
+                switch (this.animationState) {
+                    case 'dash':
+                        return 200; // Animation normale pour le dash
+                    case 'shield':
+                        return 500; // Animation plus lente en garde
+                    case 'attack':
+                    case 'uppercut':
+                    case 'low':
+                    case 'double':
+                        return 300; // Vitesse normale pour les attaques
+                    case 'idle':
+                        return 300; // Vitesse normale pour idle
+                    case 'walk':
+                        return 250; // Légèrement plus rapide pour la marche
+                    case 'hurt':
+                        return 400; // Plus lent pour hurt
+                    default:
+                        return 300; // Vitesse par défaut
+                }
+            }
 
             update(deltaTime) {
                 const dt = deltaTime / 1000;
@@ -602,6 +691,28 @@
                 
                 if (this.specialCooldown > 0) {
                     this.specialCooldown -= deltaTime;
+                }
+                
+                // Gestion des cooldowns
+                if (this.dashCooldown > 0) {
+                    this.dashCooldown -= deltaTime;
+                }
+                
+                if (this.blockStun > 0) {
+                    this.blockStun -= deltaTime;
+                }
+                
+                // Gestion du dash
+                if (this.isDashing) {
+                    this.dashTimer += deltaTime;
+                    this.vx = this.dashDirection * this.dashSpeed;
+                    
+                    if (this.dashTimer >= this.dashDuration) {
+                        this.isDashing = false;
+                        this.dashTimer = 0;
+                        this.animationState = 'idle'; // Retour à l'état idle
+                        this.animationFrame = 1;
+                    }
                 }
                 
                 if (this.isChargingSpecial) {
@@ -637,60 +748,96 @@
                 // Empêcher toute action si le joueur est au sol ou se relève
                 if (!this.isDown && !this.isGettingUp) {
                     if (this.isPlayer1) {
-                        if (keys['KeyA']) {
-                            this.vx = -this.speed;
-                            this.facingLeft = true;
-                            isMoving = true;
-                        } else if (keys['KeyD']) {
-                            this.vx = this.speed;
-                            this.facingLeft = false;
-                            isMoving = true;
-                        } else {
-                            this.vx = 0;
+                        // Système de garde (S pour bloquer)
+                        if (keys['KeyS'] && !this.isDashing) {
+                            const guardDirection = this.facingLeft ? -1 : 1;
+                            this.startBlocking(guardDirection);
+                        } else if (!keys['KeyS']) {
+                            this.stopBlocking();
                         }
                         
-                        if (keys['KeyW'] && this.onGround) {
+                        // Système de dash (double tap ou Q/E)
+                        if (keys['KeyQ'] && !this.isBlocking) {
+                            this.startDash(-1); // Dash gauche
+                        } else if (keys['KeyE'] && !this.isBlocking) {
+                            this.startDash(1); // Dash droite
+                        }
+                        
+                        // Mouvements normaux (désactivés pendant dash et garde)
+                        if (!this.isDashing && !this.isBlocking) {
+                            if (keys['KeyA']) {
+                                this.vx = -this.speed;
+                                this.facingLeft = true;
+                                isMoving = true;
+                            } else if (keys['KeyD']) {
+                                this.vx = this.speed;
+                                this.facingLeft = false;
+                                isMoving = true;
+                            } else {
+                                this.vx = 0;
+                            }
+                        }
+                        
+                        if (keys['KeyW'] && this.onGround && !this.isBlocking) {
                             this.vy = -this.jumpPower;
                             this.onGround = false;
                         }
                         
-                        // Touches d'attaque et combos
-                        if (keys['KeyG'] && !this.isAttacking && !this.isHurt) {
+                        // Touches d'attaque et combos (bloquées pendant garde)
+                        if (keys['KeyG'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
                         }
-                        if (keys['KeyU'] && !this.isAttacking && !this.isHurt) {
+                        if (keys['KeyU'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
                         }
-                        if (keys['KeyF'] && !this.isAttacking && !this.isHurt) {
+                        if (keys['KeyF'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             console.log("🔥 JOUEUR 1 - TOUCHE F PRESSÉE!");
                             this.handleComboAttack();
                         }
                     } else {
-                        if (keys['ArrowLeft']) {
-                            this.vx = -this.speed;
-                            this.facingLeft = true;
-                            isMoving = true;
-                        } else if (keys['ArrowRight']) {
-                            this.vx = this.speed;
-                            this.facingLeft = false;
-                            isMoving = true;
-                        } else {
-                            this.vx = 0;
+                        // Système de garde (ArrowDown pour bloquer)
+                        if (keys['ArrowDown'] && !this.isDashing) {
+                            const guardDirection = this.facingLeft ? -1 : 1;
+                            this.startBlocking(guardDirection);
+                        } else if (!keys['ArrowDown']) {
+                            this.stopBlocking();
                         }
                         
-                        if (keys['ArrowUp'] && this.onGround) {
+                        // Système de dash (Digit0 et Enter)
+                        if (keys['Digit0'] && !this.isBlocking) {
+                            this.startDash(-1); // Dash gauche
+                        } else if (keys['Enter'] && !this.isBlocking) {
+                            this.startDash(1); // Dash droite
+                        }
+                        
+                        // Mouvements normaux (désactivés pendant dash et garde)
+                        if (!this.isDashing && !this.isBlocking) {
+                            if (keys['ArrowLeft']) {
+                                this.vx = -this.speed;
+                                this.facingLeft = true;
+                                isMoving = true;
+                            } else if (keys['ArrowRight']) {
+                                this.vx = this.speed;
+                                this.facingLeft = false;
+                                isMoving = true;
+                            } else {
+                                this.vx = 0;
+                            }
+                        }
+                        
+                        if (keys['ArrowUp'] && this.onGround && !this.isBlocking) {
                             this.vy = -this.jumpPower;
                             this.onGround = false;
                         }
                         
-                        // Touches d'attaque et combos
-                        if (keys['KeyL'] && !this.isAttacking && !this.isHurt) {
+                        // Touches d'attaque et combos (bloquées pendant garde)
+                        if (keys['KeyL'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
                         }
-                        if (keys['KeyU'] && !this.isAttacking && !this.isHurt) {
+                        if (keys['KeyU'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
                         }
-                        if (keys['KeyF'] && !this.isAttacking && !this.isHurt) {
+                        if (keys['KeyF'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
                         }
                     }
@@ -805,7 +952,10 @@
                 
                 this.animationTimer += deltaTime;
                 
-                if (this.animationTimer >= this.frameSpeed) {
+                // Obtenir la vitesse d'animation selon l'état actuel
+                const currentFrameSpeed = this.getCurrentFrameSpeed();
+                
+                if (this.animationTimer >= currentFrameSpeed) {
                     this.animationTimer = 0;
                     
                     if (!this.isChargingSpecial) {
@@ -813,7 +963,8 @@
                         
                         const maxFrames = {
                             'idle': 3, 'walk': 4, 'jump': 2, 'attack': 3, 'hurt': 2, 'special': 6,
-                            'uppercut': 3, 'low': 3, 'double': 3, 'down': 3, 'getup': 4
+                            'uppercut': 3, 'low': 3, 'double': 3, 'down': 3, 'getup': 4,
+                            'dash': 3, 'shield': 3
                         };
                         
                         const maxFrame = maxFrames[this.animationState] || 1;
@@ -900,9 +1051,39 @@
                 this.animationFrame = 1;
             }
             
-            takeDamage(amount) {
+            takeDamage(amount, attackerX = null, knockdownType = null) {
+                // Vérifier si l'attaque est bloquée
+                if (this.isBlocking && attackerX !== null) {
+                    // Déterminer la direction de l'attaque
+                    const attackFromLeft = attackerX < this.x;
+                    const attackFromRight = attackerX > this.x;
+                    
+                    // Vérifier si la garde est dans la bonne direction
+                    const guardingCorrectDirection = 
+                        (attackFromLeft && this.blockDirection < 0) || 
+                        (attackFromRight && this.blockDirection > 0);
+                    
+                    if (guardingCorrectDirection) {
+                        // Attaque bloquée !
+                        this.blockStun = this.blockStunDuration;
+                        this.health -= Math.floor(amount * 0.2); // Seulement 20% des dégâts
+                        this.health = Math.max(0, this.health);
+                        
+                        // Petit recul lors du block
+                        const pushback = attackFromLeft ? 50 : -50;
+                        this.vx = pushback;
+                        
+                        console.log(`${this.type} : Attaque bloquée ! Dégâts réduits.`);
+                        return true; // Attaque bloquée
+                    }
+                }
+                
+                // Attaque non bloquée - dégâts normaux
                 this.health -= amount;
                 this.health = Math.max(0, this.health);
+                
+                // Arrêter la garde si on prend des dégâts
+                this.stopBlocking();
                 
                 // Ne pas forcer l'état hurt si on est déjà knockdown
                 // Le knockdown aura priorité sur l'animation hurt
@@ -917,6 +1098,9 @@
                 // Interruption des actions en cours
                 this.isAttacking = false;
                 this.isChargingSpecial = false;
+                this.isDashing = false;
+                
+                return false; // Attaque non bloquée
             }
             
             render(ctx) {
@@ -965,9 +1149,67 @@
                     ctx.lineWidth = 2;
                     ctx.strokeText(this.debugText, this.x + this.width/2, this.y - 30);
                     ctx.fillText(this.debugText, this.x + this.width/2, this.y - 30);
-                    this.debugTimer--;
+                    
+                    this.debugTimer -= 16.67; // ~60fps
+                    if (this.debugTimer <= 0) {
+                        this.debugText = "";
+                    }
+                }
+                
+                // Effet visuel de garde
+                if (this.isBlocking) {
+                    ctx.save();
+                    ctx.strokeStyle = '#00FFFF';
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([5, 5]);
+                    
+                    // Bouclier frontal
+                    const shieldX = this.facingLeft ? this.x - 10 : this.x + this.width + 10;
+                    const shieldY = this.y + 10;
+                    const shieldWidth = 15;
+                    const shieldHeight = this.height - 20;
+                    
+                    ctx.strokeRect(shieldX - shieldWidth/2, shieldY, shieldWidth, shieldHeight);
                     ctx.restore();
                 }
+                
+                // Effet visuel de dash
+                if (this.isDashing) {
+                    ctx.save();
+                    ctx.strokeStyle = '#FFFF00';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([2, 2]);
+                    
+                    // Traînée de mouvement
+                    for (let i = 0; i < 3; i++) {
+                        const trailX = this.x - (this.dashDirection * 20 * (i + 1));
+                        const alpha = 1 - (i * 0.3);
+                        ctx.globalAlpha = alpha;
+                        ctx.strokeRect(trailX, this.y, this.width, this.height);
+                    }
+                    ctx.restore();
+                }
+                
+                // Cooldown indicators
+                ctx.save();
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                
+                // Dash cooldown
+                if (this.dashCooldown > 0) {
+                    const dashPercent = (this.dashCooldown / this.dashCooldownDuration * 100).toFixed(0);
+                    ctx.fillStyle = '#FFFF00';
+                    ctx.fillText(`D: ${dashPercent}%`, this.x + this.width/2, this.y - 5);
+                }
+                
+                // Block stun
+                if (this.blockStun > 0) {
+                    const stunPercent = (this.blockStun / this.blockStunDuration * 100).toFixed(0);
+                    ctx.fillStyle = '#FF0000';
+                    ctx.fillText(`STUN: ${stunPercent}%`, this.x + this.width/2, this.y + this.height + 15);
+                }
+                
+                ctx.restore();
                 
                 // Barre de vie
                 const barWidth = 60;
@@ -1081,8 +1323,11 @@
                 
                 for (const player of players) {
                     if (projectile.owner !== player && projectile.checkCollision(player)) {
-                        player.takeDamage(projectile.damage);
-                        player.vx = projectile.direction * 120; // Réduit de 200 à 120
+                        const wasBlocked = player.takeDamage(projectile.damage, projectile.x);
+                        
+                        if (!wasBlocked) {
+                            player.vx = projectile.direction * 120; // Réduit de 200 à 120
+                        }
                         
                         // Effets d'impact spectaculaires pour l'attaque spéciale !
                         const impactX = player.x + player.width/2;
@@ -1144,35 +1389,36 @@
                         }
                         
                         // Appliquer les dégâts APRÈS les effets spéciaux
-                        p2.takeDamage(damage);
-                        p1.hasHit = true;
+                        const wasBlocked = p2.takeDamage(damage, p1.x, p1.comboType);
                         
-                        // Effets selon le type de combo (sauf low qui est déjà traité)
-                        if (p1.comboType === 'uppercut') {
-                            p2.vy = -400; // Projette vers le haut
-                            p2.vx = (p2.x > p1.x ? 120 : -120); // Réduit de 200 à 120
-                            // Effet d'impact critique sur le menton/torse
-                            impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
-                            // Screen shake modéré
-                            screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
-                        } else if (p1.comboType === 'double') {
-                            p2.vx = (p2.x > p1.x ? knockback * 1.2 : -knockback * 1.2); // Réduit de 1.5 à 1.2
-                            // Double impact pour double hit
-                            impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
-                            setTimeout(() => {
-                                impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
-                            }, 150);
-                            // Screen shake double
-                            screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
-                            setTimeout(() => {
+                        if (!wasBlocked) {
+                            p1.hasHit = true;
+                            
+                            // Effets selon le type de combo
+                            if (p1.comboType === 'uppercut') {
+                                p2.vy = -400; // Projette vers le haut
+                                p2.vx = (p2.x > p1.x ? 120 : -120);
+                                impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
                                 screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
-                            }, 150);
+                            } else if (p1.comboType === 'double') {
+                                p2.vx = (p2.x > p1.x ? knockback * 1.2 : -knockback * 1.2);
+                                impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
+                                setTimeout(() => {
+                                    impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
+                                }, 150);
+                                screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
+                                setTimeout(() => {
+                                    screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
+                                }, 150);
+                            } else if (p1.comboType !== 'low') { // Low attack déjà géré
+                                p2.vx = (p2.x > p1.x ? knockback : -knockback);
+                                impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
+                                screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
+                            }
                         } else {
-                            p2.vx = (p2.x > p1.x ? knockback : -knockback);
-                            // Effet d'impact normal sur le torse
-                            impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
-                            // Screen shake léger
-                            screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
+                            // Effet de garde réussie
+                            impactEffects.push(new ImpactEffect(impactX, impactY, 'blocked', 300));
+                            screenShake = { x: 0, y: 0, intensity: 3, duration: 150 };
                         }
                         
                         // Affichage du type d'attaque
@@ -1207,35 +1453,36 @@
                         }
                         
                         // Appliquer les dégâts APRÈS les effets spéciaux
-                        p1.takeDamage(damage);
-                        p2.hasHit = true;
+                        const wasBlocked = p1.takeDamage(damage, p2.x, p2.comboType);
                         
-                        // Effets selon le type de combo (sauf low qui est déjà traité)
-                        if (p2.comboType === 'uppercut') {
-                            p1.vy = -400; // Projette vers le haut
-                            p1.vx = (p1.x > p2.x ? 120 : -120); // Réduit de 200 à 120
-                            // Effet d'impact critique sur le menton/torse
-                            impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
-                            // Screen shake modéré
-                            screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
-                        } else if (p2.comboType === 'double') {
-                            p1.vx = (p1.x > p2.x ? knockback * 1.2 : -knockback * 1.2); // Réduit de 1.5 à 1.2
-                            // Double impact pour double hit
-                            impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
-                            setTimeout(() => {
-                                impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
-                            }, 150);
-                            // Screen shake double
-                            screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
-                            setTimeout(() => {
+                        if (!wasBlocked) {
+                            p2.hasHit = true;
+                            
+                            // Effets selon le type de combo
+                            if (p2.comboType === 'uppercut') {
+                                p1.vy = -400; // Projette vers le haut
+                                p1.vx = (p1.x > p2.x ? 120 : -120);
+                                impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
                                 screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
-                            }, 150);
+                            } else if (p2.comboType === 'double') {
+                                p1.vx = (p1.x > p2.x ? knockback * 1.2 : -knockback * 1.2);
+                                impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
+                                setTimeout(() => {
+                                    impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
+                                }, 150);
+                                screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
+                                setTimeout(() => {
+                                    screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
+                                }, 150);
+                            } else if (p2.comboType !== 'low') { // Low attack déjà géré
+                                p1.vx = (p1.x > p2.x ? knockback : -knockback);
+                                impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
+                                screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
+                            }
                         } else {
-                            p1.vx = (p1.x > p2.x ? knockback : -knockback);
-                            // Effet d'impact normal sur le torse
-                            impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
-                            // Screen shake léger
-                            screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
+                            // Effet de garde réussie
+                            impactEffects.push(new ImpactEffect(impactX, impactY, 'blocked', 300));
+                            screenShake = { x: 0, y: 0, intensity: 3, duration: 150 };
                         }
                         
                         // Affichage du type d'attaque

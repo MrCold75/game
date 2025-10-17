@@ -86,8 +86,8 @@
         const spriteList = [
             // Sprites normaux
             'ninja_idle1.png', 'ninja_idle2.png', 'ninja_idle3.png',
-            'ninja_walk1.png', 'ninja_walk2.png', 'ninja_walk3.png', 'ninja_walk4.png',
-            'ninja_jump1.png', 'ninja_jump2.png',
+            'ninja_walk1.png', 'ninja_walk2.png', 'ninja_walk3.png', 'ninja_walk4.png', 'ninja_walk5.png', 'ninja_walk6.png', 'ninja_walk7.png', 'ninja_walk8.png',
+            'ninja_jump1.png', 'ninja_jump2.png', 'ninja_jump3.png', 'ninja_jump4.png', 'ninja_jump5.png',
             'ninja_attack1.png', 'ninja_attack2.png', 'ninja_attack3.png',
             'ninja_hurt1.png', 'ninja_hurt2.png',
             // Nouveaux sprites de combos
@@ -146,11 +146,18 @@
             totalSprites = spriteList.length;
             document.getElementById('loading').textContent = `⏳ Chargement des sprites... (0/${totalSprites})`;
             
+            console.log(`🚀 Début chargement de ${totalSprites} sprites`);
+            
             spriteList.forEach(spritePath => {
                 const img = new Image();
                 const fullPath = spritePath.startsWith('special/') 
                     ? `assets/characters/skills/${spritePath.replace('special/', '')}`
                     : `assets/characters/${getSpritePath(spritePath)}`;
+                
+                // Debug pour dash et shield
+                if (spritePath.includes('dash') || spritePath.includes('shield')) {
+                    console.log(`📂 Loading sprite: ${spritePath} → ${fullPath}`);
+                }
                 
                 img.onload = () => {
                     sprites[spritePath] = img;
@@ -228,8 +235,19 @@
                 const attackFrame = Math.min(frame, 3);
                 spritePath = `ninja_attack${attackFrame}.png`;
                 return sprites[spritePath] || null;
+            } else if (animationState === 'dash') {
+                // Pour le dash, utiliser toujours le sprite normal (pas de retournement automatique)
+                spritePath = `ninja_dash${frame}.png`;
+            } else if (animationState === 'shield') {
+                // Pour le shield, utiliser toujours la frame 2 (fixe)
+                spritePath = `ninja_shield2.png`;
             } else {
                 spritePath = `ninja_${animationState}${frame}.png`;
+            }
+            
+            // Debug pour walk et jump
+            if (animationState === 'walk' || animationState === 'jump' || animationState === 'dash' || animationState === 'shield') {
+                console.log(`🎯 Animation: ${animationState}, Frame: ${frame}, Sprite: ${spritePath}, Exists: ${!!sprites[spritePath]}`);
             }
             
             return sprites[spritePath] || null;
@@ -591,8 +609,8 @@
                 // Système de dash
                 this.isDashing = false;
                 this.dashTimer = 0;
-                this.dashDuration = 400; // 0.4 secondes de dash (plus long et jouable)
-                this.dashSpeed = 500; // Vitesse du dash (un peu réduite)
+                this.dashDuration = 250; // 0.25 secondes de dash (plus court et précis) ⚡
+                this.dashSpeed = 700; // Vitesse du dash ULTRA rapide ! 🚀
                 this.dashCooldown = 0;
                 this.dashCooldownDuration = 1000; // 1 seconde entre chaque dash
                 this.dashDirection = 0; // -1 gauche, 1 droite
@@ -641,6 +659,7 @@
                     this.dashTimer = 0;
                     this.dashDirection = direction;
                     this.dashCooldown = this.dashCooldownDuration;
+                    this.facingLeft = direction < 0; // Mettre à jour l'orientation !
                     this.animationState = 'dash'; // Utilise l'animation de dash spécifique
                     this.animationFrame = 1; // Commencer à la frame 1
                     console.log(`${this.type} : Dash ${direction > 0 ? 'droite' : 'gauche'} !`);
@@ -707,12 +726,39 @@
                     this.dashTimer += deltaTime;
                     this.vx = this.dashDirection * this.dashSpeed;
                     
+                    // 💨 Effets de particules pendant le dash !
+                    if (Math.random() < 1.0) { // 100% de chance de créer une particule
+                        for (let i = 0; i < 5; i++) {
+                            const particle = {
+                                x: this.x + Math.random() * this.width,
+                                y: this.y + Math.random() * this.height,
+                                vx: -this.dashDirection * (50 + Math.random() * 100), // Particules vers l'arrière
+                                vy: (Math.random() - 0.5) * 50,
+                                life: 0.3 + Math.random() * 0.2,
+                                maxLife: 0.3 + Math.random() * 0.2,
+                                color: `hsl(${200 + Math.random() * 60}, 100%, ${50 + Math.random() * 30}%)` // Bleu cyan
+                            };
+                            if (!this.dashParticles) this.dashParticles = [];
+                            this.dashParticles.push(particle);
+                        }
+                    }
+                    
                     if (this.dashTimer >= this.dashDuration) {
                         this.isDashing = false;
                         this.dashTimer = 0;
                         this.animationState = 'idle'; // Retour à l'état idle
                         this.animationFrame = 1;
                     }
+                }
+                
+                // 💨 Mise à jour des particules de dash
+                if (this.dashParticles) {
+                    this.dashParticles = this.dashParticles.filter(particle => {
+                        particle.life -= deltaTime;
+                        particle.x += particle.vx * deltaTime;
+                        particle.y += particle.vy * deltaTime;
+                        return particle.life > 0;
+                    });
                 }
                 
                 if (this.isChargingSpecial) {
@@ -797,6 +843,7 @@
                     } else {
                         // Système de garde (ArrowDown pour bloquer)
                         if (keys['ArrowDown'] && !this.isDashing) {
+                            console.log("🛡️ GARDE ACTIVÉE!");
                             const guardDirection = this.facingLeft ? -1 : 1;
                             this.startBlocking(guardDirection);
                         } else if (!keys['ArrowDown']) {
@@ -805,8 +852,10 @@
                         
                         // Système de dash (Digit0 et Enter)
                         if (keys['Digit0'] && !this.isBlocking) {
+                            console.log("💨 DASH GAUCHE!");
                             this.startDash(-1); // Dash gauche
                         } else if (keys['Enter'] && !this.isBlocking) {
+                            console.log("💨 DASH DROITE!");
                             this.startDash(1); // Dash droite
                         }
                         
@@ -936,6 +985,10 @@
                 } else if (this.isAttacking) {
                     // Utiliser l'état d'animation défini par le combo au lieu de forcer 'attack'
                     newState = this.animationState; // Garder l'état actuel (uppercut, low, double, attack)
+                } else if (this.isDashing) {
+                    newState = 'dash';
+                } else if (this.isBlocking) {
+                    newState = 'shield';
                 } else if (!this.onGround) {
                     newState = 'jump';
                 } else if (isMoving) {
@@ -962,12 +1015,18 @@
                         this.animationFrame++;
                         
                         const maxFrames = {
-                            'idle': 3, 'walk': 4, 'jump': 2, 'attack': 3, 'hurt': 2, 'special': 6,
+                            'idle': 3, 'walk': 8, 'jump': 5, 'attack': 3, 'hurt': 2, 'special': 6,
                             'uppercut': 3, 'low': 3, 'double': 3, 'down': 3, 'getup': 4,
                             'dash': 3, 'shield': 3
                         };
                         
                         const maxFrame = maxFrames[this.animationState] || 1;
+                        
+                        // Debug maxFrame
+                        if (this.animationState === 'walk' || this.animationState === 'jump') {
+                            console.log(`🔧 ${this.animationState}: maxFrame=${maxFrame}, currentFrame=${this.animationFrame}`);
+                        }
+                        
                         if (this.animationFrame > maxFrame) {
                             this.animationFrame = 1;
                         }
@@ -1116,8 +1175,8 @@
                     
                     if (this.type.toLowerCase().includes('ninja')) {
                         // Forcer une taille constante pour tous les sprites ninja
-                        renderWidth = 80;  // Taille fixe largeur
-                        renderHeight = 80; // Taille fixe hauteur
+                        renderWidth = 100;  // Taille fixe largeur (agrandie)
+                        renderHeight = 100; // Taille fixe hauteur (agrandie)
                     }
                     
                     if (this.facingLeft) {
@@ -1127,6 +1186,22 @@
                         ctx.drawImage(sprite, this.x, this.y, renderWidth, renderHeight);
                     }
                     ctx.restore();
+                    
+                    // 💨 Rendu des particules de dash (sans mise à jour ici)
+                    if (this.dashParticles) {
+                        this.dashParticles.forEach(particle => {
+                            if (particle.life > 0) {
+                                const alpha = particle.life / particle.maxLife;
+                                ctx.save();
+                                ctx.globalAlpha = alpha;
+                                ctx.fillStyle = particle.color;
+                                ctx.beginPath();
+                                ctx.arc(particle.x, particle.y, 3 * alpha, 0, Math.PI * 2);
+                                ctx.fill();
+                                ctx.restore();
+                            }
+                        });
+                    }
                 } else {
                     // Fallback rectangle
                     ctx.fillStyle = this.isPlayer1 ? 'blue' : 'red';
@@ -1215,7 +1290,7 @@
                 const barWidth = 60;
                 const barHeight = 8;
                 const barX = this.x + (this.width - barWidth) / 2;
-                const barY = this.y - 15;
+                const barY = this.y - 25; // Descendue de -15 à -25
                 
                 ctx.fillStyle = 'red';
                 ctx.fillRect(barX, barY, barWidth, barHeight);

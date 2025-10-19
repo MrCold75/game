@@ -47,19 +47,20 @@
         <canvas id="gameCanvas" width="1200" height="800" style="display: none;"></canvas>
         
         <div id="controls" style="display: none;">
-            <strong>🎮 Jump Ultimate Stars - SYSTÈME DE COMBOS + DASH & GARDE</strong><br>
-            <span style="color: gold;">Joueur 1:</span> WASD + G (attaque) + U (uppercut) + F (attaque basse) + <span style="color: cyan;">Shift+G (Technique Spéciale)</span><br>
-            <span style="color: gold;">Nouvelles commandes P1:</span> S (garde) + Q (dash gauche) + E (dash droite)<br>
-            <span style="color: lime;">Joueur 2:</span> ↑↓←→ + L (attaque) + U (uppercut) + F (attaque basse) + <span style="color: cyan;">Shift+L (Technique Spéciale)</span><br>
-            <span style="color: lime;">Nouvelles commandes P2:</span> ↓ (garde) + 0 (dash gauche) + Entrée (dash droite)<br>
-            <span style="color: gold;">⚡ COMBOS: G+G/L+L (double frappe) | U (uppercut) | F (attaque basse)</span><br>
-            <span style="color: cyan;">🛡️ GARDE: Bloque les attaques frontales (20% dégâts) | ⚡ DASH: Mouvement rapide avec cooldown</span><br>
+            <strong>🥷 NINJA FIGHTER - CONTRÔLES SIMPLIFIÉS</strong><br>
+            <span style="color: gold;">🥷 Ninja (P1):</span> A/D=Marche | Q=Dash⬅️ | E=Dash➡️ | ,=Saut | S=Garde | <span style="color: lime;">I=Attaque</span> | J=Uppercut | K=Attaque basse | Z=Spécial | <span style="color: orange;">O=GATLING</span> | <span style="color: cyan;">C=Technique</span><br>
+            <span style="color: red;">👹 Démon (P2):</span> Flèches=Mouvement | ↓=Garde | 0=Dash⬅️ | Enter=Dash➡️ | L=Attaque | Numpad1/2/3=Combos<br>
+            <span style="color: cyan;">🔥 GATLING SPECIAL:</span> <span style="color: orange;">Maintenir O = GATLING ATTACK "ORA ORA ORA" (consomme endurance)</span><br>
+            <span style="color: purple;">💪 ENDURANCE:</span> <span style="color: yellow;">Dash=25pts | Gatling=20pts/sec | Régénère après 1s</span><br>
+            <span style="color: yellow;">✨ EFFETS:</span> Dash=Particules cyan | Garde=Aura bleue | Gatling=Explosion orange<br>
             R: Redémarrer | P: Pause
         </div>
         
         <div id="gameInfo" style="display: none;">
             <div>🔋 Santé P1: <span id="p1Health">100</span>%</div>
             <div>🔋 Santé P2: <span id="p2Health">100</span>%</div>
+            <div>💪 Endurance P1: <span id="p1Stamina">100</span>%</div>
+            <div>💪 Endurance P2: <span id="p2Stamina">100</span>%</div>
             <div>⚡ Phase: <span id="specialPhase">Normal</span></div>
         </div>
     </div>
@@ -78,6 +79,12 @@
         // Système de screen shake
         let screenShake = { x: 0, y: 0, intensity: 0, duration: 0 };
         
+        // Fonction pour déclencher le screen shake
+        function startScreenShake(duration, intensity) {
+            screenShake.duration = Math.max(screenShake.duration, duration);
+            screenShake.intensity = Math.max(screenShake.intensity, intensity);
+        }
+        
         // SYSTÈME DE PRÉCHARGEMENT DES SPRITES
         const sprites = {};
         let spritesLoaded = 0;
@@ -89,6 +96,9 @@
             'ninja_walk1.png', 'ninja_walk2.png', 'ninja_walk3.png', 'ninja_walk4.png', 'ninja_walk5.png', 'ninja_walk6.png', 'ninja_walk7.png', 'ninja_walk8.png',
             'ninja_jump1.png', 'ninja_jump2.png', 'ninja_jump3.png', 'ninja_jump4.png', 'ninja_jump5.png',
             'ninja_attack1.png', 'ninja_attack2.png', 'ninja_attack3.png',
+            // Sprites Gatling (9 frames)
+            'ninja_gatling1.png', 'ninja_gatling2.png', 'ninja_gatling3.png', 'ninja_gatling4.png', 'ninja_gatling5.png',
+            'ninja_gatling6.png', 'ninja_gatling7.png', 'ninja_gatling8.png', 'ninja_gatling9.png',
             'ninja_hurt1.png', 'ninja_hurt2.png',
             // Nouveaux sprites de combos
             'ninja_uppercut1.png', 'ninja_uppercut2.png', 'ninja_uppercut3.png',
@@ -119,6 +129,7 @@
                 'jump': 'basic',
                 'icon': 'basic',
                 'attack': 'combat',
+                'gatling': 'combat', // Nouveau : sprites Gatling dans combat
                 'hurt': 'combat',
                 'uppercut': 'special',
                 'low': 'special',
@@ -234,6 +245,12 @@
                 
                 const attackFrame = Math.min(frame, 3);
                 spritePath = `ninja_attack${attackFrame}.png`;
+                return sprites[spritePath] || null;
+            } else if (animationState === 'gatling') {
+                // Nouveau système Gatling 9 frames - PRIORITÉ ABSOLUE
+                const gatlingFrame = Math.min(Math.max(frame, 1), 9);
+                spritePath = `ninja_gatling${gatlingFrame}.png`;
+                console.log(`🎯 GATLING: Frame ${gatlingFrame}, Sprite: ${spritePath}, Exists: ${!!sprites[spritePath]}`);
                 return sprites[spritePath] || null;
             } else if (animationState === 'dash') {
                 // Pour le dash, utiliser toujours le sprite normal (pas de retournement automatique)
@@ -620,6 +637,35 @@
                 this.blockStun = 0;
                 this.blockStunDuration = 300; // 0.3 secondes de stun après avoir bloqué
                 this.blockDirection = 0; // Direction de la garde
+                
+                // 💪 SYSTÈME D'ENDURANCE
+                this.maxStamina = 100;
+                this.stamina = 100;
+                this.staminaRegenRate = 30; // Points par seconde
+                this.staminaRegenDelay = 1000; // 1s avant régénération
+                this.lastStaminaUse = 0;
+                
+                // Coûts en endurance
+                this.dashStaminaCost = 25;
+                this.gatlingStaminaCost = 5; // Par coup
+                this.gatlingStaminaPerSecond = 20; // Par seconde maintenue
+                
+                // 🔥 NOUVEAU SYSTÈME GATLING 9 FRAMES
+                this.gatlingPhase = 0; // 0=inactif, 1=enclenchement(1-5), 2=attaque(6-9)
+                this.gatlingFrameTimer = 0;
+                this.gatlingEnclenchementSpeed = 200; // ms par frame d'enclenchement (DYNAMIQUE - 1 seconde totale)
+                this.gatlingAttackSpeed = 80; // ms par frame d'attaque (ULTRA-RAPIDE mitraillette!)
+                this.gatlingCurrentFrame = 1;
+                
+                // 🦘 SYSTÈME DE DOUBLE SAUT
+                this.canDoubleJump = false;
+                this.hasDoubleJumped = false;
+                this.doubleJumpPower = 400; // Un peu moins puissant que le saut normal (500)
+                this.doubleJumpStaminaCost = 15;
+                
+                // Variables pour éviter les sauts répétés
+                this.jumpKeyPressed = false;
+                this.jumpKeyPressedP2 = false; // Variable séparée pour Player 2
             }
             
             chargeSpecialAttack() {
@@ -652,9 +698,13 @@
                 setTimeout(() => { timeScale = 1.0; }, 1000);
             }
             
-            // Système de dash
+            // Système de dash avec endurance
             startDash(direction) {
-                if (this.dashCooldown <= 0 && !this.isDashing && !this.isAttacking && !this.isHurt && !this.isDown) {
+                if (this.dashCooldown <= 0 && !this.isDashing && !this.isAttacking && !this.isHurt && !this.isDown && this.stamina >= this.dashStaminaCost) {
+                    // Consommer l'endurance
+                    this.stamina -= this.dashStaminaCost;
+                    this.lastStaminaUse = Date.now();
+                    
                     this.isDashing = true;
                     this.dashTimer = 0;
                     this.dashDirection = direction;
@@ -662,7 +712,9 @@
                     this.facingLeft = direction < 0; // Mettre à jour l'orientation !
                     this.animationState = 'dash'; // Utilise l'animation de dash spécifique
                     this.animationFrame = 1; // Commencer à la frame 1
-                    console.log(`${this.type} : Dash ${direction > 0 ? 'droite' : 'gauche'} !`);
+                    console.log(`${this.type} : Dash ${direction > 0 ? 'droite' : 'gauche'} ! Stamina: ${this.stamina}`);
+                } else if (this.stamina < this.dashStaminaCost) {
+                    console.log(`${this.type} : Pas assez d'endurance pour dash ! (${this.stamina}/${this.dashStaminaCost})`);
                 }
             }
             
@@ -683,6 +735,14 @@
             // Obtenir la vitesse d'animation selon l'état actuel
             getCurrentFrameSpeed() {
                 switch (this.animationState) {
+                    case 'gatling':
+                        // SYSTÈME GATLING: vitesses différentes selon la phase
+                        if (this.gatlingPhase === 1) {
+                            return this.gatlingEnclenchementSpeed; // 600ms pour préparation
+                        } else if (this.gatlingPhase === 2) {
+                            return this.gatlingAttackSpeed; // 120ms pour attaque
+                        }
+                        return 600; // Fallback
                     case 'dash':
                         return 200; // Animation normale pour le dash
                     case 'shield':
@@ -707,6 +767,83 @@
                 const dt = deltaTime / 1000;
                 const scaledDeltaTime = deltaTime * timeScale;
                 const scaledDt = dt * timeScale;
+                
+                // 💪 GESTION DE L'ENDURANCE
+                const currentTime = Date.now();
+                
+                // Régénération d'endurance après délai
+                if (currentTime - this.lastStaminaUse > this.staminaRegenDelay && this.stamina < this.maxStamina) {
+                    this.stamina += this.staminaRegenRate * dt;
+                    this.stamina = Math.min(this.stamina, this.maxStamina);
+                }
+                
+                // 🔥 SYSTÈME GATLING INDÉPENDANT - basé sur temps réel
+                if (this.isGatling && this.gatlingPhase > 0) {
+                    const currentTime = Date.now();
+                    
+                    // Utiliser le temps réel au lieu des deltas pour éviter les accumulations
+                    if (!this.gatlingLastFrameTime) {
+                        this.gatlingLastFrameTime = currentTime;
+                    }
+                    
+                    const timeSinceLastFrame = currentTime - this.gatlingLastFrameTime;
+                    const currentSpeed = this.gatlingPhase === 1 ? this.gatlingEnclenchementSpeed : this.gatlingAttackSpeed;
+                    const elapsedTime = currentTime - this.gatlingStartTime;
+                    
+                    console.log(`⏱️ GATLING REAL TIME: Frame=${this.gatlingCurrentFrame}, TimeSinceFrame=${timeSinceLastFrame}ms, Speed=${currentSpeed}ms, Elapsed=${elapsedTime}ms`);
+                    
+                    if (timeSinceLastFrame >= currentSpeed) {
+                        this.gatlingLastFrameTime = currentTime; // Reset du temps de frame
+                        this.gatlingCurrentFrame++;
+                        this.animationFrame = this.gatlingCurrentFrame;
+                        // PHASE 1 : Enclenchement (frames 1-5) - PRÉPARATION DRAMATIQUE
+                        if (this.gatlingPhase === 1) {
+                            console.log(`🎭 PRÉPARATION GATLING Frame: ${this.gatlingCurrentFrame}/5 - Vitesse: ${currentSpeed}ms (${currentSpeed/1000}s)`);
+                            
+                            if (this.gatlingCurrentFrame > 5) {
+                                // Transition vers phase d'attaque
+                                this.gatlingPhase = 2;
+                                this.gatlingCurrentFrame = 6;
+                                this.animationFrame = 6;
+                                this.isAttacking = true; // ✅ Activer isAttacking seulement en phase d'attaque!
+                                const preparationDuration = Date.now() - this.gatlingStartTime;
+                                console.log(`⚡💥 PHASE ATTAQUE DÉCLENCHÉE! Préparation durée: ${preparationDuration}ms (attendue: 3000ms)`);
+                            }
+                        }
+                        
+                        // PHASE 2 : Attaque continue (frames 6-9)
+                        else if (this.gatlingPhase === 2) {
+                            // Vérifier l'endurance AVANT de continuer
+                            const staminaCost = 8;
+                            if (this.stamina < staminaCost) {
+                                console.log(`❌ Endurance épuisée (${this.stamina.toFixed(1)}/${staminaCost}) - Arrêt Gatling!`);
+                                this.stopGatlingAttack();
+                                return;
+                            }
+                            
+                            // Boucle sur les frames 6-9
+                            if (this.gatlingCurrentFrame > 9) {
+                                this.gatlingCurrentFrame = 6; // Retour à la frame 6
+                                this.animationFrame = 6;
+                                
+                                // Consommer endurance seulement à chaque cycle complet (retour frame 6)
+                                this.stamina -= staminaCost;
+                                this.lastStaminaUse = currentTime;
+                                console.log(`⚡ Cycle Gatling - Endurance: ${this.stamina.toFixed(1)}/${this.maxStamina}`);
+                                
+                                // Infliger des dégâts à chaque cycle
+                                this.performGatlingHit();
+                            }
+                        }
+                    }
+                    
+                    // Arrêter si touche Gatling relâchée (seulement après la phase d'enclenchement)
+                    const gatlingKey = this.isPlayer1 ? 'KeyO' : 'Numpad3';
+                    if (!keys[gatlingKey] && this.gatlingPhase === 2) {
+                        console.log(`🔴 Gatling arrêté: touche ${gatlingKey} relâchée`);
+                        this.stopGatlingAttack();
+                    }
+                }
                 
                 if (this.specialCooldown > 0) {
                     this.specialCooldown -= deltaTime;
@@ -770,7 +907,7 @@
                         this.specialTimer = 0;
                         this.specialPhase++;
                         
-                        if (this.specialPhase === 4) {
+                        if (this.specialPhase === 5) {
                             this.executeSpecialAttack();
                         } else if (this.specialPhase > 6) {
                             this.isChargingSpecial = false;
@@ -787,6 +924,28 @@
                     }
                     
                     return;
+                }
+                
+                // 🥊 Gestion du Gatling Attack
+                if (this.isGatling) {
+                    this.gatlingTimer += deltaTime * 1000; // Convert to ms
+                    
+                    if (this.gatlingTimer >= this.gatlingInterval) {
+                        this.gatlingTimer = 0;
+                        this.gatlingCount++;
+                        
+                        // Créer un coup de gatling
+                        this.performGatlingHit();
+                        
+                        if (this.gatlingCount >= this.gatlingMaxHits) {
+                            // Fin du gatling
+                            this.isGatling = false;
+                            this.isAttacking = false;
+                            this.animationState = 'idle';
+                            this.animationFrame = 1;
+                            console.log(`🔥 ${this.type}: Gatling terminé! ${this.gatlingCount} coups!`);
+                        }
+                    }
                 }
                 
                 let isMoving = false;
@@ -824,21 +983,46 @@
                             }
                         }
                         
-                        if (keys['KeyW'] && this.onGround && !this.isBlocking) {
-                            this.vy = -this.jumpPower;
-                            this.onGround = false;
+                        // Gestion du saut avec détection de pression de touche
+                        if (keys['Comma'] && !this.isBlocking) {
+                            if (!this.jumpKeyPressed) { // Seulement si la touche vient d'être pressée
+                                if (this.onGround) {
+                                    // Saut normal
+                                    this.vy = -this.jumpPower;
+                                    this.onGround = false;
+                                    this.canDoubleJump = true;
+                                    this.hasDoubleJumped = false;
+                                } else if (this.canDoubleJump && !this.hasDoubleJumped && this.stamina >= this.doubleJumpStaminaCost) {
+                                    // Double saut
+                                    this.vy = -this.doubleJumpPower;
+                                    this.hasDoubleJumped = true;
+                                    this.canDoubleJump = false;
+                                    this.stamina -= this.doubleJumpStaminaCost;
+                                }
+                                this.jumpKeyPressed = true;
+                            }
+                        } else {
+                            this.jumpKeyPressed = false; // Réinitialiser quand la touche est relâchée
                         }
                         
                         // Touches d'attaque et combos (bloquées pendant garde)
-                        if (keys['KeyG'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
+                        if (keys['KeyI'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
                         }
-                        if (keys['KeyU'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
+                        if (keys['KeyJ'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
                         }
-                        if (keys['KeyF'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
-                            console.log("🔥 JOUEUR 1 - TOUCHE F PRESSÉE!");
+                        if (keys['KeyK'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
+                            console.log("🔥 JOUEUR 1 - TOUCHE K PRESSÉE!");
                             this.handleComboAttack();
+                        }
+                        if (keys['KeyZ'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
+                            console.log("💥 JOUEUR 1 - TOUCHE Z PRESSÉE!");
+                            this.handleComboAttack();
+                        }
+                        if (keys['KeyO'] && !this.isGatling && !this.isHurt && !this.isBlocking) {
+                            console.log("🥊 JOUEUR 1 - GATLING ATTACK O!");
+                            this.startGatlingAttack();
                         }
                     } else {
                         // Système de garde (ArrowDown pour bloquer)
@@ -874,20 +1058,40 @@
                             }
                         }
                         
-                        if (keys['ArrowUp'] && this.onGround && !this.isBlocking) {
-                            this.vy = -this.jumpPower;
-                            this.onGround = false;
+                        // Gestion du saut pour Player 2 avec détection de pression de touche
+                        if (keys['ArrowUp'] && !this.isBlocking) {
+                            if (!this.jumpKeyPressedP2) { // Seulement si la touche vient d'être pressée
+                                if (this.onGround) {
+                                    // Saut normal
+                                    this.vy = -this.jumpPower;
+                                    this.onGround = false;
+                                    this.canDoubleJump = true;
+                                    this.hasDoubleJumped = false;
+                                } else if (this.canDoubleJump && !this.hasDoubleJumped && this.stamina >= this.doubleJumpStaminaCost) {
+                                    // Double saut
+                                    this.vy = -this.doubleJumpPower;
+                                    this.hasDoubleJumped = true;
+                                    this.canDoubleJump = false;
+                                    this.stamina -= this.doubleJumpStaminaCost;
+                                }
+                                this.jumpKeyPressedP2 = true;
+                            }
+                        } else {
+                            this.jumpKeyPressedP2 = false; // Réinitialiser quand la touche est relâchée
                         }
                         
                         // Touches d'attaque et combos (bloquées pendant garde)
                         if (keys['KeyL'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
                         }
-                        if (keys['KeyU'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
+                        if (keys['Numpad1'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
                         }
-                        if (keys['KeyF'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
+                        if (keys['Numpad2'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
+                        }
+                        if (keys['Numpad3'] && !this.isGatling && !this.isHurt && !this.isBlocking) {
+                            this.startGatlingAttack();
                         }
                     }
                 }
@@ -912,6 +1116,9 @@
                     this.y = 620;
                     this.vy = 0;
                     this.onGround = true;
+                    // Réinitialiser les variables du double saut quand on touche le sol
+                    this.canDoubleJump = false;
+                    this.hasDoubleJumped = false;
                 }
                 
                 this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
@@ -980,6 +1187,8 @@
                     }
                 } else if (this.isHurt) {
                     newState = 'hurt'; // État blessé
+                } else if (this.isGatling && this.gatlingPhase > 0) {
+                    newState = 'gatling'; // PRIORITÉ ABSOLUE pour Gatling avant TOUT
                 } else if (this.isChargingSpecial) {
                     newState = 'special';
                 } else if (this.isAttacking) {
@@ -999,36 +1208,47 @@
                 
                 if (newState !== this.animationState) {
                     this.animationState = newState;
-                    this.animationFrame = 1;
-                    this.animationTimer = 0;
+                    // 🔥 NE PAS réinitialiser animationFrame si on passe en mode Gatling
+                    if (!(newState === 'gatling' && this.isGatling && this.gatlingPhase > 0)) {
+                        this.animationFrame = 1;
+                        this.animationTimer = 0;
+                    }
+                    console.log(`🎬 État changé vers: ${newState}, Gatling: ${this.isGatling}, Phase: ${this.gatlingPhase}`);
                 }
                 
-                this.animationTimer += deltaTime;
-                
-                // Obtenir la vitesse d'animation selon l'état actuel
-                const currentFrameSpeed = this.getCurrentFrameSpeed();
-                
-                if (this.animationTimer >= currentFrameSpeed) {
-                    this.animationTimer = 0;
+                // 🔥 SÉPARATION COMPLÈTE: système Gatling VS système normal
+                if (this.isGatling && this.gatlingPhase > 0) {
+                    // ⚡ MODE GATLING: ne toucher à RIEN du système normal
+                    console.log(`🔒 Mode Gatling actif - système normal BLOQUÉ`);
+                } else {
+                    // 🎬 MODE NORMAL: animation normale seulement si pas en Gatling
+                    this.animationTimer += deltaTime;
                     
-                    if (!this.isChargingSpecial) {
-                        this.animationFrame++;
+                    // Obtenir la vitesse d'animation selon l'état actuel
+                    const currentFrameSpeed = this.getCurrentFrameSpeed();
+                    
+                    if (this.animationTimer >= currentFrameSpeed) {
+                        this.animationTimer = 0;
                         
-                        const maxFrames = {
-                            'idle': 3, 'walk': 8, 'jump': 5, 'attack': 3, 'hurt': 2, 'special': 6,
-                            'uppercut': 3, 'low': 3, 'double': 3, 'down': 3, 'getup': 4,
-                            'dash': 3, 'shield': 3
-                        };
-                        
-                        const maxFrame = maxFrames[this.animationState] || 1;
-                        
-                        // Debug maxFrame
-                        if (this.animationState === 'walk' || this.animationState === 'jump') {
-                            console.log(`🔧 ${this.animationState}: maxFrame=${maxFrame}, currentFrame=${this.animationFrame}`);
-                        }
-                        
-                        if (this.animationFrame > maxFrame) {
-                            this.animationFrame = 1;
+                        if (!this.isChargingSpecial) {
+                            this.animationFrame++;
+                            
+                            const maxFrames = {
+                                'idle': 3, 'walk': 8, 'jump': 5, 'attack': 3, 'hurt': 2, 'special': 6,
+                                'uppercut': 3, 'low': 3, 'double': 3, 'down': 3, 'getup': 4,
+                                'dash': 3, 'shield': 3
+                            };
+                            
+                            const maxFrame = maxFrames[this.animationState] || 1;
+                            
+                            // Debug maxFrame
+                            if (this.animationState === 'walk' || this.animationState === 'jump') {
+                                console.log(`🔧 ${this.animationState}: maxFrame=${maxFrame}, currentFrame=${this.animationFrame}`);
+                            }
+                            
+                            if (this.animationFrame > maxFrame) {
+                                this.animationFrame = 1;
+                            }
                         }
                     }
                 }
@@ -1038,32 +1258,189 @@
                 const currentTime = Date.now();
                 const timeSinceLastAttack = currentTime - this.lastAttackTime;
                 
+                // Initialiser le compteur de combo G si nécessaire
+                if (!this.comboGCounter) this.comboGCounter = 0;
+                if (!this.lastComboGTime) this.lastComboGTime = 0;
+                
                 // Détection des combos selon les touches pressées
-                if (keys['KeyU']) {
-                    // Uppercut (U)
+                if (keys['KeyJ']) {
+                    // Uppercut (J)
                     this.comboType = 'uppercut';
+                    this.comboGCounter = 0; // Reset combo G
                     this.attack();
                     console.log(`${this.type}: UPPERCUT!`);
-                } else if (keys['KeyF']) {
-                    // Attaque basse (F)
+                } else if (keys['KeyK']) {
+                    // Attaque basse (K)
                     this.comboType = 'low';
+                    this.comboGCounter = 0; // Reset combo G
                     this.attack();
                     console.log(`🔥 ${this.type}: ATTAQUE BASSE - LOW ATTACK!`);
-                } else if (timeSinceLastAttack < this.comboWindow && timeSinceLastAttack > 50) {
-                    // Double frappe (G+G) - détection améliorée
-                    this.comboType = 'double';
-                    this.isDoubleAttack = true;
-                    this.doubleAttackTimer = 0;
+                } else if (keys['KeyZ']) {
+                    // Attaque spéciale Z
+                    this.comboType = 'special';
+                    this.comboGCounter = 0; // Reset combo G
                     this.attack();
-                    console.log(`${this.type}: DOUBLE FRAPPE! (timing: ${timeSinceLastAttack}ms)`);
-                } else {
-                    // Attaque normale
+                    console.log(`💥 ${this.type}: ATTAQUE SPÉCIALE Z!`);
+                } else if (keys['KeyO']) {
+                    // GATLING ATTACK maintenu avec O!
+                    if (!this.isGatling && this.stamina >= this.gatlingStaminaCost) {
+                        this.startGatlingAttack();
+                        console.log(`🥊 ${this.type}: GATLING ATTACK ACTIVÉ!`);
+                    }
+                    return;
+                } else if (keys['KeyI']) {
+                    // Attaque normale I
                     this.comboType = 'normal';
+                    this.comboGCounter = 0; // Reset combo G
                     this.attack();
-                    console.log(`${this.type}: ATTAQUE NORMALE (timing: ${timeSinceLastAttack}ms)`);
+                    console.log(`👊 ${this.type}: ATTAQUE NORMALE I!`);
+                    
+                    // Attaque normale I
+                    if (timeSinceLastAttack < this.comboWindow && timeSinceLastAttack > 50) {
+                        // Double frappe (G+G) - détection améliorée
+                        this.comboType = 'double';
+                        this.isDoubleAttack = true;
+                        this.doubleAttackTimer = 0;
+                        this.attack();
+                        console.log(`${this.type}: DOUBLE FRAPPE! (timing: ${timeSinceLastAttack}ms)`);
+                    } else {
+                        // Attaque normale
+                        this.comboType = 'normal';
+                        this.attack();
+                        console.log(`${this.type}: ATTAQUE NORMALE (timing: ${timeSinceLastAttack}ms)`);
+                    }
                 }
                 
                 this.lastAttackTime = currentTime;
+            }
+            
+            // 🥊 GATLING ATTACK - Multi-coups rapides avec endurance !
+            startGatlingAttack() {
+                if (this.gatlingPhase > 0) return; // Déjà en cours
+                
+                // 🔋 Vérifier l'endurance minimum requise pour démarrer
+                const minStaminaRequired = 10; // Endurance minimum pour démarrer
+                if (this.stamina < minStaminaRequired) {
+                    console.log(`❌ ${this.type}: Endurance insuffisante pour Gatling (${this.stamina.toFixed(1)}/${minStaminaRequired})`);
+                    return;
+                }
+                
+                console.log(`🔥🥊 ${this.type}: GATLING ATTACK - PRÉPARATION (3 secondes)!`);
+                
+                this.isGatling = true;
+                this.gatlingPhase = 1; // Phase d'enclenchement
+                this.gatlingCurrentFrame = 1;
+                this.gatlingFrameTimer = 0; // FORCER à zéro
+                this.gatlingCount = 0;
+                this.gatlingDamage = 15; // Dégâts par coup
+                this.gatlingStartTime = Date.now(); // Chronomètre pour mesurer la durée
+                this.gatlingLastFrameTime = null; // Nouveau système temps réel
+                
+                console.log(`🔄 SYSTÈME GATLING TEMPS RÉEL initialisé - Début: ${this.gatlingStartTime}`);
+                
+                // ❌ NE PAS set isAttacking=true pendant la préparation!
+                // this.isAttacking sera activé seulement en phase d'attaque (frame 6+)
+                this.animationState = 'gatling';
+                this.animationFrame = 1;
+                
+                console.log(`� Phase 1: PRÉPARATION DRAMATIQUE (frames 1-5, 1000ms/frame) - L'adversaire a le temps de voir venir!`);
+            }
+            
+            // Arrêter le gatling
+            stopGatlingAttack() {
+                if (this.isGatling) {
+                    console.log(`🔥 ${this.type}: Gatling TERMINÉ! Total coups: ${this.gatlingCount}`);
+                    this.isGatling = false;
+                    this.isAttacking = false;
+                    
+                    // 🔧 FORCER le retour à idle1 et réinitialiser le système d'animation
+                    this.animationState = 'idle';
+                    this.animationFrame = 1;
+                    this.animationTimer = 0; // Réinitialiser le timer d'animation
+                    
+                    this.gatlingPhase = 0;
+                    this.gatlingCurrentFrame = 1;
+                    this.gatlingFrameTimer = 0;
+                    this.gatlingCount = 0;
+                    this.gatlingLastFrameTime = null; // Nettoyer le système temps réel
+                    
+                    console.log(`🔄 Animation reset: state=idle, frame=1, timer=0`);
+                }
+            }
+            
+            // Effet visuel pour le gatling
+            createGatlingEffect() {
+                // Particules d'impact style "ORA ORA"
+                for (let i = 0; i < 10; i++) {
+                    const particle = {
+                        x: this.x + this.width + (this.facingLeft ? -50 : 20),
+                        y: this.y + Math.random() * this.height,
+                        vx: (this.facingLeft ? -1 : 1) * (100 + Math.random() * 200),
+                        vy: (Math.random() - 0.5) * 100,
+                        life: 0.4,
+                        maxLife: 0.4,
+                        color: `hsl(${30 + Math.random() * 60}, 100%, ${60 + Math.random() * 20}%)` // Orange-jaune
+                    };
+                    if (!this.gatlingParticles) this.gatlingParticles = [];
+                    this.gatlingParticles.push(particle);
+                }
+            }
+            
+            // Exécuter un coup de gatling
+            performGatlingHit() {
+                console.log(`💥 Gatling hit ${this.gatlingCount}/${this.gatlingMaxHits}`);
+                
+                // 📳 SCREEN SHAKE sur chaque coup !
+                startScreenShake(100, 5); // 100ms, intensité 5
+                
+                // Créer des particules d'impact
+                this.createGatlingEffect();
+                
+                // � EFFET D'IMPACT pour chaque coup de Gatling (même dans le vide)
+                const attackX = this.x + (this.facingLeft ? -20 : this.width + 20);
+                const attackY = this.y + this.height/2;
+                impactEffects.push(new ImpactEffect(attackX, attackY, 'hit', 200));
+                
+                // �🚫 NE PLUS override this.animationFrame - laisser le système Gatling gérer
+                
+                // Vérifier si on touche l'adversaire
+                const opponent = this.isPlayer1 ? players[1] : players[0];
+                if (opponent && this.checkCollision(opponent)) {
+                    opponent.takeDamage(this.gatlingDamage, this);
+                    console.log(`🥊 Gatling hit sur ${opponent.type}!`);
+                    
+                    // � IMPACT EFFECTS pour Gatling!
+                    const impactX = opponent.x + opponent.width/2;
+                    const impactY = opponent.y + opponent.height/3;
+                    
+                    // Effet d'impact principal
+                    impactEffects.push(new ImpactEffect(impactX, impactY, 'hit', 300));
+                    
+                    // Effets multiples aléatoires pour style "ORA ORA"
+                    const randomOffsetX = (Math.random() - 0.5) * 40;
+                    const randomOffsetY = (Math.random() - 0.5) * 30;
+                    impactEffects.push(new ImpactEffect(impactX + randomOffsetX, impactY + randomOffsetY, 'critical', 250));
+                    
+                    // �📳 SCREEN SHAKE plus fort quand on touche !
+                    startScreenShake(200, 8);
+                }
+            }
+            
+            // Détection de collision pour les joueurs
+            checkCollision(other) {
+                const hitboxPadding = 5; // Réduit de 20 à 5 pour une portée plus réaliste
+                const myLeft = this.x - hitboxPadding;
+                const myRight = this.x + this.width + hitboxPadding;
+                const myTop = this.y;
+                const myBottom = this.y + this.height;
+                
+                const otherLeft = other.x;
+                const otherRight = other.x + other.width;
+                const otherTop = other.y;
+                const otherBottom = other.y + other.height;
+                
+                return myLeft < otherRight && myRight > otherLeft &&
+                       myTop < otherBottom && myBottom > otherTop;
             }
             
             attack() {
@@ -1162,9 +1539,52 @@
                 return false; // Attaque non bloquée
             }
             
+            /**
+             * Ajuste automatiquement la taille du sprite si il dépasse les limites
+             * @param {HTMLImageElement} sprite - L'image du sprite
+             * @returns {Object} - Dimensions ajustées {width, height}
+             */
+            getAdjustedSpriteDimensions(sprite) {
+                if (!sprite) return { width: this.width, height: this.height };
+                
+                let renderWidth = this.width;
+                let renderHeight = this.height;
+                
+                // Taille standardisée pour les ninjas
+                if (this.type.toLowerCase().includes('ninja')) {
+                    renderWidth = 100;
+                    renderHeight = 100;
+                }
+                
+                // Vérifier si le sprite dépasse les limites du canvas
+                const spriteRight = this.x + renderWidth;
+                const spriteBottom = this.y + renderHeight;
+                
+                // Ajuster si nécessaire
+                if (spriteRight > canvas.width) {
+                    const scale = canvas.width / spriteRight;
+                    renderWidth *= scale;
+                    renderHeight *= scale;
+                }
+                
+                if (spriteBottom > canvas.height) {
+                    const scale = canvas.height / spriteBottom;
+                    renderWidth *= scale;
+                    renderHeight *= scale;
+                }
+                
+                return { width: renderWidth, height: renderHeight };
+            }
+            
             render(ctx) {
-                // Obtenir le sprite
-                const sprite = getSprite(this.animationState, this.animationFrame);
+                // Obtenir le sprite - UTILISER gatlingCurrentFrame en mode Gatling
+                const currentFrame = (this.isGatling && this.gatlingPhase > 0) ? this.gatlingCurrentFrame : this.animationFrame;
+                const sprite = getSprite(this.animationState, currentFrame);
+                
+                // Debug pour Gatling - IDENTIFIÉ PAR JOUEUR
+                if (this.isGatling && this.gatlingPhase > 0) {
+                    console.log(`🎬 ${this.type} RENDER GATLING: state=${this.animationState}, gatlingFrame=${this.gatlingCurrentFrame}, phase=${this.gatlingPhase}, stamina=${this.stamina.toFixed(1)}`);
+                }
                 
                 if (sprite) {
                     ctx.save();
@@ -1290,7 +1710,7 @@
                 const barWidth = 60;
                 const barHeight = 8;
                 const barX = this.x + (this.width - barWidth) / 2;
-                const barY = this.y - 25; // Descendue de -15 à -25
+                const barY = this.y - 30; // Juste au-dessus de la tête
                 
                 ctx.fillStyle = 'red';
                 ctx.fillRect(barX, barY, barWidth, barHeight);
@@ -1302,6 +1722,28 @@
                 ctx.strokeStyle = 'white';
                 ctx.strokeRect(barX, barY, barWidth, barHeight);
                 
+                // 💪 Barre d'endurance (sous la barre de vie)
+                const staminaBarY = barY + barHeight + 2; // 2px d'espacement
+                
+                ctx.fillStyle = 'orange'; // Fond orange foncé
+                ctx.fillRect(barX, staminaBarY, barWidth, barHeight);
+                
+                // Couleur dynamique selon le niveau d'endurance
+                const staminaPercent = this.stamina / this.maxStamina;
+                if (staminaPercent < 0.25) {
+                    ctx.fillStyle = 'red'; // Rouge si < 25%
+                } else if (staminaPercent < 0.5) {
+                    ctx.fillStyle = 'orange'; // Orange si < 50%
+                } else {
+                    ctx.fillStyle = 'yellow'; // Jaune normal
+                }
+                
+                const staminaWidth = staminaPercent * barWidth;
+                ctx.fillRect(barX, staminaBarY, staminaWidth, barHeight);
+                
+                ctx.strokeStyle = 'white';
+                ctx.strokeRect(barX, staminaBarY, barWidth, barHeight);
+                
                 // Debug visuel pour les états spéciaux
                 if (this.isDown) {
                     ctx.save();
@@ -1310,8 +1752,8 @@
                     ctx.textAlign = 'center';
                     ctx.strokeStyle = 'white';
                     ctx.lineWidth = 2;
-                    ctx.strokeText(`DOWN! ${Math.ceil(this.downTimer/1000)}s`, this.x + this.width/2, this.y - 25);
-                    ctx.fillText(`DOWN! ${Math.ceil(this.downTimer/1000)}s`, this.x + this.width/2, this.y - 25);
+                    ctx.strokeText(`DOWN! ${Math.ceil(this.downTimer/1000)}s`, this.x + this.width/2, this.y - 50);
+                    ctx.fillText(`DOWN! ${Math.ceil(this.downTimer/1000)}s`, this.x + this.width/2, this.y - 50);
                     ctx.restore();
                 }
                 
@@ -1339,6 +1781,78 @@
                 
 
             }
+        }
+
+        // ========== FONCTIONS UTILITAIRES POUR LA GESTION DES SPRITES ==========
+        
+        /**
+         * Fonction pour dessiner un sprite avec gestion automatique du recadrage
+         * @param {CanvasRenderingContext2D} ctx - Contexte du canvas
+         * @param {HTMLImageElement} image - Image du sprite
+         * @param {number} x - Position X
+         * @param {number} y - Position Y
+         * @param {number} width - Largeur souhaitée
+         * @param {number} height - Hauteur souhaitée
+         */
+        function drawSpriteWithClipping(ctx, image, x, y, width, height) {
+            if (!image || !image.complete) return;
+            
+            // Calculer les zones visibles
+            const visibleX = Math.max(0, x);
+            const visibleY = Math.max(0, y);
+            const visibleRight = Math.min(canvas.width, x + width);
+            const visibleBottom = Math.min(canvas.height, y + height);
+            
+            // Si le sprite est complètement hors de l'écran, ne pas le dessiner
+            if (visibleX >= visibleRight || visibleY >= visibleBottom) return;
+            
+            // Calculer les offsets pour le sprite source
+            const sourceX = (visibleX - x) / width * image.width;
+            const sourceY = (visibleY - y) / height * image.height;
+            const sourceWidth = (visibleRight - visibleX) / width * image.width;
+            const sourceHeight = (visibleBottom - visibleY) / height * image.height;
+            
+            // Dessiner la partie visible du sprite
+            ctx.drawImage(
+                image,
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                visibleX, visibleY, visibleRight - visibleX, visibleBottom - visibleY
+            );
+        }
+        
+        /**
+         * Fonction pour ajuster automatiquement les dimensions de sprite
+         * @param {number} originalWidth - Largeur originale du sprite
+         * @param {number} originalHeight - Hauteur originale du sprite
+         * @param {number} maxWidth - Largeur maximum autorisée
+         * @param {number} maxHeight - Hauteur maximum autorisée
+         * @returns {Object} - Nouvelles dimensions {width, height}
+         */
+        function getOptimalSpriteDimensions(originalWidth, originalHeight, maxWidth, maxHeight) {
+            const widthRatio = maxWidth / originalWidth;
+            const heightRatio = maxHeight / originalHeight;
+            const scale = Math.min(widthRatio, heightRatio, 1); // Ne pas agrandir
+            
+            return {
+                width: Math.floor(originalWidth * scale),
+                height: Math.floor(originalHeight * scale)
+            };
+        }
+        
+        /**
+         * Fonction pour créer une zone de sécurité autour des sprites
+         * @param {number} x - Position X du sprite
+         * @param {number} y - Position Y du sprite
+         * @param {number} width - Largeur du sprite
+         * @param {number} height - Hauteur du sprite
+         * @param {number} margin - Marge de sécurité
+         * @returns {Object} - Position ajustée {x, y}
+         */
+        function applySafeZone(x, y, width, height, margin = 10) {
+            return {
+                x: Math.max(-margin, Math.min(canvas.width - width + margin, x)),
+                y: Math.max(-margin, Math.min(canvas.height - height + margin, y))
+            };
         }
 
         function init() {
@@ -1435,12 +1949,21 @@
             const [p1, p2] = players;
             const distance = Math.abs(p1.x - p2.x);
             
-            if (distance < 100) {
+            if (distance < 60) { // Réduit de 100 à 60 pixels pour une portée plus réaliste
                 if (p1.isAttacking && !p1.hasHit && p1.animationFrame >= 2) {
-                    // Vérifier que p1 attaque dans la bonne direction
-                    const isHitting = p1.facingLeft ? (p2.x < p1.x) : (p2.x > p1.x);
+                    // Vérifier que p1 attaque dans la bonne direction ET à bonne portée
+                    const attackRange = 50; // Portée d'attaque en pixels
+                    let canHit = false;
                     
-                    if (isHitting) {
+                    if (p1.facingLeft && p2.x < p1.x) {
+                        // Attaque vers la gauche
+                        canHit = (p1.x - p2.x - p2.width) <= attackRange;
+                    } else if (!p1.facingLeft && p2.x > p1.x) {
+                        // Attaque vers la droite  
+                        canHit = (p2.x - p1.x - p1.width) <= attackRange;
+                    }
+                    
+                    if (canHit) {
                         let damage = calculateComboDamage(p1);
                         let knockback = calculateComboKnockback(p1);
                         
@@ -1501,10 +2024,19 @@
                     }
                 }
                 if (p2.isAttacking && !p2.hasHit && p2.animationFrame >= 2) {
-                    // Vérifier que p2 attaque dans la bonne direction
-                    const isHitting = p2.facingLeft ? (p1.x < p2.x) : (p1.x > p2.x);
+                    // Vérifier que p2 attaque dans la bonne direction ET à bonne portée
+                    const attackRange = 50; // Portée d'attaque en pixels
+                    let canHit = false;
                     
-                    if (isHitting) {
+                    if (p2.facingLeft && p1.x < p2.x) {
+                        // Attaque vers la gauche
+                        canHit = (p2.x - p1.x - p1.width) <= attackRange;
+                    } else if (!p2.facingLeft && p1.x > p2.x) {
+                        // Attaque vers la droite
+                        canHit = (p1.x - p2.x - p2.width) <= attackRange;
+                    }
+                    
+                    if (canHit) {
                         let damage = calculateComboDamage(p2);
                         let knockback = calculateComboKnockback(p2);
                         
@@ -1568,6 +2100,8 @@
             
             document.getElementById('p1Health').textContent = Math.round(p1.health);
             document.getElementById('p2Health').textContent = Math.round(p2.health);
+            document.getElementById('p1Stamina').textContent = Math.round(p1.stamina);
+            document.getElementById('p2Stamina').textContent = Math.round(p2.stamina);
         }
 
         // Fonctions utilitaires pour les combos
@@ -1665,7 +2199,7 @@
         window.addEventListener('keydown', (e) => {
             keys[e.code] = true;
             
-            if (e.shiftKey && e.code === 'KeyG') {
+            if (e.code === 'KeyC') { // Technique spéciale sur C
                 e.preventDefault();
                 if (players[0]) players[0].chargeSpecialAttack();
             }

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ninja Fighter - Version Simple</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        #gameContainer {
+            text-align: center;
+        }
+        
+        canvas {
+            border: 3px solid #4a90e2;
+            border-radius: 10px;
+            background: linear-gradient(to bottom, #87CEEB, #98FB98);
+            box-shadow: 0 0 20px rgba(74, 144, 226, 0.5);
+        }
+        
+        #controls {
+            margin-top: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #4a90e2;
+        }
+        
+        .health-bar {
+            width: 200px;
+            height: 20px;
+            background: #333;
+            border: 2px solid #fff;
+            border-radius: 10px;
+            margin: 10px;
+            display: inline-block;
+            position: relative;
+        }
+        
+        .health-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ffff44, #44ff44);
+            border-radius: 8px;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div>
+            <span>Ninja</span>
+            <div class="health-bar">
+                <div class="health-fill" id="p1Health" style="width: 100%"></div>
+            </div>
+            <div class="health-bar">
+                <div class="health-fill" id="p2Health" style="width: 100%"></div>
+            </div>
+            <span>Démon</span>
+        </div>
+        
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        
+        <div id="controls">
+            <strong>🥷 Ninja Fighter</strong><br><br>
+            <strong>Joueur 1 (Ninja):</strong> A/D = Mouvement | W = Saut | S = Garde | G = Attaque<br>
+            <strong>Joueur 2 (Démon):</strong> ← → = Mouvement | ↑ = Saut | ↓ = Garde | ESPACE = Attaque<br>
+            <strong>R = Redémarrer</strong>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Variables globales
+        let keys = {};
+        let gameRunning = true;
+        
+        // Classes simplifiées
+        class SimplePlayer {
+            constructor(x, y, color, controls) {
+                this.x = x;
+                this.y = y;
+                this.width = 40;
+                this.height = 60;
+                this.color = color;
+                this.controls = controls;
+                this.health = 100;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.onGround = false;
+                this.isAttacking = false;
+                this.isBlocking = false;
+                this.attackTimer = 0;
+                this.facingLeft = false;
+            }
+            
+            update() {
+                // Mouvement horizontal
+                if (keys[this.controls.left]) {
+                    this.velocityX = -5;
+                    this.facingLeft = true;
+                } else if (keys[this.controls.right]) {
+                    this.velocityX = 5;
+                    this.facingLeft = false;
+                } else {
+                    this.velocityX *= 0.8; // Friction
+                }
+                
+                // Saut
+                if (keys[this.controls.jump] && this.onGround) {
+                    this.velocityY = -15;
+                    this.onGround = false;
+                }
+                
+                // Garde
+                this.isBlocking = keys[this.controls.block];
+                
+                // Attaque
+                if (keys[this.controls.attack] && !this.isAttacking) {
+                    this.isAttacking = true;
+                    this.attackTimer = 20;
+                }
+                
+                if (this.attackTimer > 0) {
+                    this.attackTimer--;
+                    if (this.attackTimer === 0) {
+                        this.isAttacking = false;
+                    }
+                }
+                
+                // Gravité
+                this.velocityY += 0.8;
+                
+                // Mise à jour position
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+                
+                // Collision avec le sol
+                if (this.y + this.height >= canvas.height - 50) {
+                    this.y = canvas.height - 50 - this.height;
+                    this.velocityY = 0;
+                    this.onGround = true;
+                }
+                
+                // Limites écran
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+            }
+            
+            draw() {
+                ctx.fillStyle = this.color;
+                
+                // Corps principal
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Effet de garde
+                if (this.isBlocking) {
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(this.x - 5, this.y - 5, this.width + 10, this.height + 10);
+                }
+                
+                // Effet d'attaque
+                if (this.isAttacking) {
+                    ctx.fillStyle = '#ff4444';
+                    const attackX = this.facingLeft ? this.x - 30 : this.x + this.width;
+                    ctx.fillRect(attackX, this.y + 15, 30, 30);
+                }
+                
+                // Yeux
+                ctx.fillStyle = 'white';
+                const eyeY = this.y + 15;
+                if (this.facingLeft) {
+                    ctx.fillRect(this.x + 5, eyeY, 8, 8);
+                    ctx.fillRect(this.x + 20, eyeY, 8, 8);
+                } else {
+                    ctx.fillRect(this.x + 12, eyeY, 8, 8);
+                    ctx.fillRect(this.x + 27, eyeY, 8, 8);
+                }
+            }
+            
+            takeDamage(amount) {
+                if (!this.isBlocking) {
+                    this.health -= amount;
+                    this.health = Math.max(0, this.health);
+                    return true;
+                }
+                return false;
+            }
+            
+            checkCollision(other) {
+                return this.x < other.x + other.width &&
+                       this.x + this.width > other.x &&
+                       this.y < other.y + other.height &&
+                       this.y + this.height > other.y;
+            }
+        }
+        
+        // Créer les joueurs
+        const player1 = new SimplePlayer(100, 200, '#4169E1', {
+            left: 'KeyA',
+            right: 'KeyD',
+            jump: 'KeyW',
+            block: 'KeyS',
+            attack: 'KeyG'
+        });
+        
+        const player2 = new SimplePlayer(650, 200, '#8B0000', {
+            left: 'ArrowLeft',
+            right: 'ArrowRight',
+            jump: 'ArrowUp',
+            block: 'ArrowDown',
+            attack: 'Space'
+        });
+        
+        // Gestion des touches
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            // Redémarrer
+            if (e.code === 'KeyR') {
+                player1.health = 100;
+                player2.health = 100;
+                player1.x = 100;
+                player2.x = 650;
+                updateHealthBars();
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // Mise à jour des barres de vie
+        function updateHealthBars() {
+            document.getElementById('p1Health').style.width = player1.health + '%';
+            document.getElementById('p2Health').style.width = player2.health + '%';
+        }
+        
+        // Boucle de jeu principale
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            // Effacer l'écran
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Dessiner le sol
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+            
+            // Mettre à jour les joueurs
+            player1.update();
+            player2.update();
+            
+            // Vérifier les collisions d'attaque
+            if (player1.isAttacking && player1.checkCollision(player2)) {
+                if (player2.takeDamage(5)) {
+                    // Knockback
+                    player2.velocityX = player1.facingLeft ? -8 : 8;
+                }
+            }
+            
+            if (player2.isAttacking && player2.checkCollision(player1)) {
+                if (player1.takeDamage(5)) {
+                    // Knockback
+                    player1.velocityX = player2.facingLeft ? -8 : 8;
+                }
+            }
+            
+            // Dessiner les joueurs
+            player1.draw();
+            player2.draw();
+            
+            // Mettre à jour les barres de vie
+            updateHealthBars();
+            
+            // Vérifier la fin de partie
+            if (player1.health <= 0) {
+                ctx.fillStyle = 'red';
+                ctx.font = '48px Arial';
+                ctx.fillText('DÉMON GAGNE!', canvas.width/2 - 150, canvas.height/2);
+            } else if (player2.health <= 0) {
+                ctx.fillStyle = 'blue';
+                ctx.font = '48px Arial';
+                ctx.fillText('NINJA GAGNE!', canvas.width/2 - 140, canvas.height/2);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Démarrer le jeu
+        console.log('🥷 Jeu simple démarré !');
+        gameLoop();
+    </script>
+</body>
+</html>

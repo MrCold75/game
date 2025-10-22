@@ -75,6 +75,29 @@
         let projectiles = [];
         let timeScale = 1.0;
         let impactEffects = [];
+        let time = 0; // Pour les animations du dojo (brouillard, etc.)
+        
+        // SYSTÈME DE ROUNDS PROFESSIONNEL 🥊
+        let roundSystem = {
+            currentRound: 1,
+            maxRounds: 5, // Premier à 3 victoires
+            p1Wins: 0,
+            p2Wins: 0,
+            roundInProgress: true,
+            showingRoundResult: false,
+            resultTimer: 0,
+            resultDuration: 6000, // 6 secondes pour laisser les animations se jouer
+            matchFinished: false,
+            winner: null,
+            roundStartTime: 0,
+            roundDuration: 60000, // 60 secondes par round
+            // NOUVEAU : Système d'animations de victoire/défaite 🎭
+            showingVictoryPoses: false,
+            victoryAnimationTime: 0,
+            victoryAnimationDuration: 4000, // 4 secondes d'animations (plus long pour 9 frames)
+            roundWinner: null, // Gagnant du round actuel
+            roundLoser: null   // Perdant du round actuel
+        };
         
         // Système de screen shake
         let screenShake = { x: 0, y: 0, intensity: 0, duration: 0 };
@@ -111,6 +134,13 @@
             'ninja_dash1.png', 'ninja_dash2.png', 'ninja_dash3.png',
             // Sprites de shield/garde
             'ninja_shield1.png', 'ninja_shield2.png', 'ninja_shield3.png',
+            // Sprites de victoire et défaite 🎉😢 (9 victory, 4 defeat)
+            'ninja_victory1.png', 'ninja_victory2.png', 'ninja_victory3.png', 'ninja_victory4.png', 'ninja_victory5.png',
+            'ninja_victory6.png', 'ninja_victory7.png', 'ninja_victory8.png', 'ninja_victory9.png',
+            'ninja_defeat1.png', 'ninja_defeat2.png', 'ninja_defeat3.png', 'ninja_defeat4.png',
+            'demon_victory1.png', 'demon_victory2.png', 'demon_victory3.png', 'demon_victory4.png', 'demon_victory5.png',
+            'demon_victory6.png', 'demon_victory7.png', 'demon_victory8.png', 'demon_victory9.png',
+            'demon_defeat1.png', 'demon_defeat2.png', 'demon_defeat3.png', 'demon_defeat4.png',
             // Sprites spéciaux (fallback vers attack si pas trouvé)
             'special/ninja_special1.png', 'special/ninja_special2.png', 'special/ninja_special3.png',
             'special/ninja_special4.png', 'special/ninja_special5.png', 'special/ninja_special6.png'
@@ -137,7 +167,9 @@
                 'down': 'special',
                 'getup': 'special',
                 'dash': 'dash',
-                'shield': 'shield'
+                'shield': 'shield',
+                'victory': 'victory', // Nouvelles animations de victoire 🎉
+                'defeat': 'defeat'    // Nouvelles animations de défaite 😢
             };
             
             // Extraire l'action de base (sans le numéro)
@@ -638,6 +670,13 @@
                 this.blockStunDuration = 300; // 0.3 secondes de stun après avoir bloqué
                 this.blockDirection = 0; // Direction de la garde
                 
+                // NOUVEAUX SYSTÈMES TACTIQUES DE LUMIÈRE
+                this.lightDamageBonus = 0; // Bonus de dégâts dans la lumière
+                this.lightSpeedBoost = 1.0; // Multiplicateur de vitesse
+                this.lightVisionBonus = 1.0; // Amélioration de la portée d'attaque
+                this.isStunned = false; // État de paralysie
+                this.stunTimer = 0; // Durée de paralysie restante
+                
                 // 💪 SYSTÈME D'ENDURANCE
                 this.maxStamina = 100;
                 this.stamina = 100;
@@ -666,6 +705,14 @@
                 // Variables pour éviter les sauts répétés
                 this.jumpKeyPressed = false;
                 this.jumpKeyPressedP2 = false; // Variable séparée pour Player 2
+                
+                // 🎭 NOUVEAUX ÉTATS POUR ANIMATIONS DE VICTOIRE/DÉFAITE
+                this.isInVictoryPose = false;
+                this.isInDefeatPose = false;
+                this.victoryAnimationTimer = 0;
+                this.defeatAnimationTimer = 0;
+                this.victoryPoseSpeed = 200; // Vitesse d'animation de victoire (ms par frame) - plus lente pour 9 frames
+                this.defeatPoseSpeed = 300;  // Vitesse d'animation de défaite (ms par frame) - plus lente pour bien voir
             }
             
             chargeSpecialAttack() {
@@ -755,7 +802,31 @@
                     case 'idle':
                         return 300; // Vitesse normale pour idle
                     case 'walk':
-                        return 250; // Légèrement plus rapide pour la marche
+                        // 🚶‍♂️ SYSTÈME PARFAIT: Synchronisation mathématique absolue
+                        const moveSpeed = Math.abs(this.vx);
+                        if (moveSpeed === 0) return 400; // Animation lente à l'arrêt
+                        
+                        // 🧮 FORMULE MAGIQUE: Chaque frame = distance précise parcourue
+                        // Objectif: 1 cycle complet d'animation (4 frames) = 80 pixels
+                        const pixelsPerCycle = 80;
+                        const framesPerCycle = 4;
+                        const pixelsPerFrame = pixelsPerCycle / framesPerCycle; // 20 pixels par frame
+                        
+                        // Calcul du temps nécessaire pour parcourir 20 pixels à la vitesse actuelle
+                        const timePerFrame = (pixelsPerFrame / moveSpeed) * 1000; // En millisecondes
+                        
+                        // Contraintes min/max pour éviter les extrêmes
+                        const perfectSpeed = Math.max(100, Math.min(500, timePerFrame));
+                        
+                        // Lissage ultra-précis avec momentum
+                        if (!this.walkSpeedHistory) this.walkSpeedHistory = [];
+                        this.walkSpeedHistory.push(perfectSpeed);
+                        if (this.walkSpeedHistory.length > 5) this.walkSpeedHistory.shift();
+                        
+                        // Moyenne mobile pour ultra-fluidité
+                        const smoothSpeed = this.walkSpeedHistory.reduce((a, b) => a + b, 0) / this.walkSpeedHistory.length;
+                        
+                        return Math.round(smoothSpeed);
                     case 'hurt':
                         return 400; // Plus lent pour hurt
                     default:
@@ -775,6 +846,48 @@
                 if (currentTime - this.lastStaminaUse > this.staminaRegenDelay && this.stamina < this.maxStamina) {
                     this.stamina += this.staminaRegenRate * dt;
                     this.stamina = Math.min(this.stamina, this.maxStamina);
+                }
+                
+                // 🎭 GESTION DES ANIMATIONS DE VICTOIRE/DÉFAITE
+                if (this.isInVictoryPose) {
+                    this.victoryAnimationTimer += deltaTime;
+                    
+                    // Animation de victoire avec 9 frames (pose complète)
+                    if (this.victoryAnimationTimer >= this.victoryPoseSpeed) {
+                        if (this.animationFrame < 9) {
+                            this.animationFrame++;
+                            this.victoryAnimationTimer = 0;
+                        } else {
+                            // Pause à la fin de l'animation, puis recommencer
+                            if (this.victoryAnimationTimer >= this.victoryPoseSpeed * 3) {
+                                this.animationFrame = 1; // Recommencer l'animation
+                                this.victoryAnimationTimer = 0;
+                            }
+                        }
+                    }
+                    
+                    // Bloquer tous les autres mouvements pendant la victoire
+                    this.vx = 0;
+                    this.vy = 0;
+                    return; // Ne pas traiter d'autres logiques de mouvement
+                }
+                
+                if (this.isInDefeatPose) {
+                    this.defeatAnimationTimer += deltaTime;
+                    
+                    // Animation de défaite avec 4 frames seulement
+                    if (this.defeatAnimationTimer >= this.defeatPoseSpeed) {
+                        this.animationFrame++;
+                        if (this.animationFrame > 4) {
+                            this.animationFrame = 4; // Rester sur la dernière frame de défaite
+                        }
+                        this.defeatAnimationTimer = 0;
+                    }
+                    
+                    // Bloquer tous les autres mouvements pendant la défaite
+                    this.vx = 0;
+                    this.vy = 0;
+                    return; // Ne pas traiter d'autres logiques de mouvement
                 }
                 
                 // 🔥 SYSTÈME GATLING INDÉPENDANT - basé sur temps réel
@@ -1112,6 +1225,7 @@
                 this.x += this.vx * scaledDt;
                 this.y += this.vy * scaledDt;
                 
+                // Collision avec le sol principal
                 if (this.y >= 620) {
                     this.y = 620;
                     this.vy = 0;
@@ -1119,6 +1233,47 @@
                     // Réinitialiser les variables du double saut quand on touche le sol
                     this.canDoubleJump = false;
                     this.hasDoubleJumped = false;
+                }
+                
+                // Système de collision avec les plateformes accessibles
+                const platforms = [
+                    {x: 280, y: 600, width: 220, height: 20}, // Plateforme gauche
+                    {x: 680, y: 480, width: 220, height: 20}, // Plateforme droite  
+                    {x: 480, y: 380, width: 220, height: 20}  // Plateforme centrale
+                ];
+                
+                // Vérifier les collisions avec chaque plateforme
+                for (const platform of platforms) {
+                    // Vérifier si le joueur entre en collision avec cette plateforme
+                    if (this.x + this.width > platform.x && 
+                        this.x < platform.x + platform.width && 
+                        this.y + this.height > platform.y && 
+                        this.y < platform.y + platform.height) {
+                        
+                        // Collision par le dessus (atterrissage)
+                        if (this.vy > 0 && this.y < platform.y) {
+                            this.y = platform.y - this.height;
+                            this.vy = 0;
+                            this.onGround = true;
+                            // Réinitialiser les variables du double saut
+                            this.canDoubleJump = false;
+                            this.hasDoubleJumped = false;
+                        }
+                        // Collision par le dessous (plafond)
+                        else if (this.vy < 0 && this.y > platform.y) {
+                            this.y = platform.y + platform.height;
+                            this.vy = 0;
+                        }
+                        // Collisions latérales
+                        else if (this.vx > 0 && this.x < platform.x) {
+                            this.x = platform.x - this.width;
+                            this.vx = 0;
+                        }
+                        else if (this.vx < 0 && this.x > platform.x + platform.width) {
+                            this.x = platform.x + platform.width;
+                            this.vx = 0;
+                        }
+                    }
                 }
                 
                 this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
@@ -1779,7 +1934,75 @@
                     ctx.restore();
                 }
                 
-
+                // 🎭 Affichage simplifié des animations de victoire/défaite
+                if (this.isInVictoryPose) {
+                    ctx.save();
+                    ctx.fillStyle = 'gold';
+                    ctx.font = 'bold 24px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    const text = '� WIN!';
+                    ctx.strokeText(text, this.x + this.width/2, this.y - 60);
+                    ctx.fillText(text, this.x + this.width/2, this.y - 60);
+                    ctx.restore();
+                }
+                
+                if (this.isInDefeatPose) {
+                    ctx.save();
+                    ctx.fillStyle = 'darkred';
+                    ctx.font = 'bold 20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    const text = '💀 K.O.';
+                    ctx.strokeText(text, this.x + this.width/2, this.y - 60);
+                    ctx.fillText(text, this.x + this.width/2, this.y - 60);
+                    ctx.restore();
+                }
+            }
+            
+            // 🎭 NOUVELLES MÉTHODES POUR ANIMATIONS DE VICTOIRE/DÉFAITE
+            startVictoryPose() {
+                console.log(`🎉 ${this.type} - Début animation de VICTOIRE !`);
+                this.isInVictoryPose = true;
+                this.isInDefeatPose = false;
+                this.animationState = 'victory';
+                this.animationFrame = 1;
+                this.victoryAnimationTimer = 0;
+                this.isAttacking = false;
+                this.isGatling = false;
+                this.isBlocking = false;
+                this.isDown = false;
+                this.isGettingUp = false;
+                this.vx = 0;
+                this.vy = 0;
+            }
+            
+            startDefeatPose() {
+                console.log(`😢 ${this.type} - Début animation de DÉFAITE !`);
+                this.isInDefeatPose = true;
+                this.isInVictoryPose = false;
+                this.animationState = 'defeat';
+                this.animationFrame = 1;
+                this.defeatAnimationTimer = 0;
+                this.isAttacking = false;
+                this.isGatling = false;
+                this.isBlocking = false;
+                this.isDown = false;
+                this.isGettingUp = false;
+                this.vx = 0;
+                this.vy = 0;
+            }
+            
+            stopVictoryDefeatPoses() {
+                console.log(`🔄 ${this.type} - Fin des animations victoire/défaite`);
+                this.isInVictoryPose = false;
+                this.isInDefeatPose = false;
+                this.animationState = 'idle';
+                this.animationFrame = 1;
+                this.victoryAnimationTimer = 0;
+                this.defeatAnimationTimer = 0;
             }
         }
 
@@ -1861,6 +2084,11 @@
                 new FixedPlayer(900, 620, 'Ninja Red', false)
             ];
             
+            // 🥊 Initialiser le système de rounds
+            roundSystem.roundStartTime = Date.now();
+            console.log(`🥊 DÉBUT DU ROUND ${roundSystem.currentRound}`);
+            console.log(`📊 Premier à 3 victoires remporte le match !`);
+            
             requestAnimationFrame(gameLoop);
         }
 
@@ -1870,6 +2098,9 @@
             
             const deltaTime = currentTime - lastTime;
             lastTime = currentTime;
+            
+            // Mettre à jour le temps pour les animations du dojo
+            time = currentTime * 0.001; // Convertir en secondes
             
             update(deltaTime);
             render();
@@ -1882,6 +2113,9 @@
                 player.update(deltaTime);
             }
             
+            // 🥊 GESTION DU SYSTÈME DE ROUNDS
+            updateRoundSystem(deltaTime);
+            
             // Mettre à jour les effets d'impact
             for (let i = impactEffects.length - 1; i >= 0; i--) {
                 const effect = impactEffects[i];
@@ -1889,6 +2123,9 @@
                     impactEffects.splice(i, 1);
                 }
             }
+            
+            // Mettre à jour les effets de lumière de combat
+
             
             // Mettre à jour le screen shake
             if (screenShake.duration > 0) {
@@ -2137,6 +2374,614 @@
             // TODO: Ajouter affichage visuel dans le jeu
         }
 
+        // 🥊 SYSTÈME DE ROUNDS PROFESSIONNEL
+        function updateRoundSystem(deltaTime) {
+            if (!roundSystem.roundInProgress) {
+                // Round terminé, affichage du résultat avec animations
+                if (roundSystem.showingRoundResult) {
+                    roundSystem.resultTimer += deltaTime;
+                    
+                    // 🎭 Gestion du temps des animations de victoire/défaite
+                    if (roundSystem.showingVictoryPoses) {
+                        roundSystem.victoryAnimationTime += deltaTime;
+                        
+                        // Après la durée des animations, les arrêter
+                        if (roundSystem.victoryAnimationTime >= roundSystem.victoryAnimationDuration) {
+                            console.log('🎭 Fin des animations de victoire/défaite');
+                            roundSystem.showingVictoryPoses = false;
+                            
+                            // Arrêter les animations des joueurs
+                            if (players[0]) players[0].stopVictoryDefeatPoses();
+                            if (players[1]) players[1].stopVictoryDefeatPoses();
+                        }
+                    }
+                    
+                    if (roundSystem.resultTimer >= roundSystem.resultDuration) {
+                        // Passer au round suivant ou finir le match
+                        if (roundSystem.matchFinished) {
+                            // Match terminé, afficher l'écran final
+                            return;
+                        } else {
+                            startNextRound();
+                        }
+                    }
+                }
+                return;
+            }
+
+            // Vérifier les conditions de fin de round
+            const p1 = players[0];
+            const p2 = players[1];
+            
+            if (!p1 || !p2) return;
+
+            // Vérifier si un joueur est mort
+            if (p1.health <= 0) {
+                endRound('player2');
+            } else if (p2.health <= 0) {
+                endRound('player1');
+            }
+
+            // Vérifier le timeout du round (optionnel)
+            const elapsedTime = Date.now() - roundSystem.roundStartTime;
+            if (elapsedTime >= roundSystem.roundDuration) {
+                // Déterminer le gagnant par la santé restante
+                if (p1.health > p2.health) {
+                    endRound('player1');
+                } else if (p2.health > p1.health) {
+                    endRound('player2');
+                } else {
+                    endRound('draw'); // Match nul
+                }
+            }
+        }
+
+        function endRound(winner) {
+            roundSystem.roundInProgress = false;
+            roundSystem.showingRoundResult = true;
+            roundSystem.showingVictoryPoses = true; // 🎭 Activer les animations
+            roundSystem.victoryAnimationTime = 0;
+            roundSystem.resultTimer = 0;
+
+            // Comptabiliser la victoire et déclencher les animations appropriées
+            if (winner === 'player1') {
+                roundSystem.p1Wins++;
+                roundSystem.roundWinner = players[0];
+                roundSystem.roundLoser = players[1];
+                console.log(`🥊 ROUND ${roundSystem.currentRound}: JOUEUR 1 GAGNE!`);
+                
+                // 🎉 Déclencher les animations de victoire/défaite
+                if (players[0]) players[0].startVictoryPose();
+                if (players[1]) players[1].startDefeatPose();
+                
+            } else if (winner === 'player2') {
+                roundSystem.p2Wins++;
+                roundSystem.roundWinner = players[1];
+                roundSystem.roundLoser = players[0];
+                console.log(`🥊 ROUND ${roundSystem.currentRound}: JOUEUR 2 GAGNE!`);
+                
+                // 🎉 Déclencher les animations de victoire/défaite
+                if (players[1]) players[1].startVictoryPose();
+                if (players[0]) players[0].startDefeatPose();
+                
+            } else {
+                console.log(`🥊 ROUND ${roundSystem.currentRound}: MATCH NUL!`);
+                roundSystem.roundWinner = null;
+                roundSystem.roundLoser = null;
+                // En cas de match nul, pas d'animations spéciales
+                roundSystem.showingVictoryPoses = false;
+            }
+
+            // Vérifier si quelqu'un a gagné le match (premier à 3 victoires)
+            if (roundSystem.p1Wins >= 3) {
+                roundSystem.matchFinished = true;
+                roundSystem.winner = 'player1';
+                console.log(`🏆 JOUEUR 1 REMPORTE LE MATCH! (${roundSystem.p1Wins}-${roundSystem.p2Wins})`);
+            } else if (roundSystem.p2Wins >= 3) {
+                roundSystem.matchFinished = true;
+                roundSystem.winner = 'player2';
+                console.log(`🏆 JOUEUR 2 REMPORTE LE MATCH! (${roundSystem.p2Wins}-${roundSystem.p1Wins})`);
+            }
+
+            // Arrêter les animations et effets de combat (mais pas les victoire/défaite)
+            if (players[0] && !players[0].isInVictoryPose && !players[0].isInDefeatPose) {
+                players[0].isAttacking = false;
+                players[0].isGatling = false;
+                players[0].isBlocking = false;
+            }
+            if (players[1] && !players[1].isInVictoryPose && !players[1].isInDefeatPose) {
+                players[1].isAttacking = false;
+                players[1].isGatling = false;
+                players[1].isBlocking = false;
+            }
+        }
+
+        function startNextRound() {
+            roundSystem.currentRound++;
+            roundSystem.roundInProgress = true;
+            roundSystem.showingRoundResult = false;
+            roundSystem.roundStartTime = Date.now();
+
+            console.log(`🥊 DÉBUT DU ROUND ${roundSystem.currentRound}`);
+            console.log(`📊 Score: Joueur 1 = ${roundSystem.p1Wins} | Joueur 2 = ${roundSystem.p2Wins}`);
+
+            // Réinitialiser les joueurs pour le nouveau round
+            resetPlayersForNewRound();
+        }
+
+        function resetPlayersForNewRound() {
+            if (players[0]) {
+                players[0].health = players[0].maxHealth;
+                players[0].stamina = players[0].maxStamina;
+                players[0].x = 200;
+                players[0].y = 620;
+                players[0].vx = 0;
+                players[0].vy = 0;
+                players[0].animationState = 'idle';
+                players[0].animationFrame = 1;
+                players[0].isAttacking = false;
+                players[0].isGatling = false;
+                players[0].isBlocking = false;
+                players[0].isHurt = false;
+                players[0].isDown = false;
+                players[0].facingLeft = false;
+                // 🎭 Arrêter les animations de victoire/défaite
+                players[0].stopVictoryDefeatPoses();
+            }
+
+            if (players[1]) {
+                players[1].health = players[1].maxHealth;
+                players[1].stamina = players[1].maxStamina;
+                players[1].x = 1000;
+                players[1].y = 620;
+                players[1].vx = 0;
+                players[1].vy = 0;
+                players[1].animationState = 'idle';
+                players[1].animationFrame = 1;
+                players[1].isAttacking = false;
+                players[1].isGatling = false;
+                players[1].isBlocking = false;
+                players[1].isHurt = false;
+                players[1].isDown = false;
+                players[1].facingLeft = true;
+                // 🎭 Arrêter les animations de victoire/défaite
+                players[1].stopVictoryDefeatPoses();
+            }
+
+            // Vider les effets et projectiles
+            impactEffects.length = 0;
+            projectiles.length = 0;
+        }
+
+        function resetMatch() {
+            roundSystem.currentRound = 1;
+            roundSystem.p1Wins = 0;
+            roundSystem.p2Wins = 0;
+            roundSystem.roundInProgress = true;
+            roundSystem.showingRoundResult = false;
+            roundSystem.matchFinished = false;
+            roundSystem.winner = null;
+            roundSystem.roundStartTime = Date.now();
+            // 🎭 Réinitialiser les variables d'animation
+            roundSystem.showingVictoryPoses = false;
+            roundSystem.victoryAnimationTime = 0;
+            roundSystem.roundWinner = null;
+            roundSystem.roundLoser = null;
+            
+            resetPlayersForNewRound();
+            console.log(`🔄 NOUVEAU MATCH COMMENCÉ!`);
+        }
+
+        function renderTraditionalDojo(ctx) {
+            // ARRIÈRE-PLAN DÉGRADÉ SOPHISTIQUÉ
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGradient.addColorStop(0, '#1a0f0a'); // Nuit profonde
+            skyGradient.addColorStop(0.2, '#2d1b12'); // Brun sombre
+            skyGradient.addColorStop(0.6, '#4a2c1a'); // Brun chaud
+            skyGradient.addColorStop(0.85, '#3d2817'); // Transition
+            skyGradient.addColorStop(1, '#2a1810'); // Base sombre
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // EFFET DE BROUILLARD/FUMÉE EN ARRIÈRE-PLAN
+            for (let i = 0; i < 8; i++) {
+                const fogGradient = ctx.createRadialGradient(
+                    100 + i * 150 + Math.sin(time + i) * 50, 
+                    300 + Math.cos(time * 0.5 + i) * 30, 
+                    0,
+                    100 + i * 150 + Math.sin(time + i) * 50, 
+                    300 + Math.cos(time * 0.5 + i) * 30, 
+                    120
+                );
+                fogGradient.addColorStop(0, 'rgba(60, 40, 25, 0.1)');
+                fogGradient.addColorStop(1, 'rgba(60, 40, 25, 0)');
+                ctx.fillStyle = fogGradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            // MURS AVEC TEXTURE BOIS RÉALISTE
+            function drawWoodTexture(x, y, width, height, vertical = true) {
+                // Base wood color
+                const woodGradient = ctx.createLinearGradient(x, y, x + (vertical ? 0 : width), y + (vertical ? height : 0));
+                woodGradient.addColorStop(0, '#8B4513');
+                woodGradient.addColorStop(0.2, '#A0522D');
+                woodGradient.addColorStop(0.4, '#8B4513');
+                woodGradient.addColorStop(0.6, '#654321');
+                woodGradient.addColorStop(0.8, '#8B4513');
+                woodGradient.addColorStop(1, '#5D4037');
+                ctx.fillStyle = woodGradient;
+                ctx.fillRect(x, y, width, height);
+                
+                // Veines du bois
+                ctx.strokeStyle = 'rgba(101, 67, 33, 0.6)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < (vertical ? height : width); i += 15) {
+                    ctx.beginPath();
+                    if (vertical) {
+                        ctx.moveTo(x, y + i);
+                        ctx.quadraticCurveTo(x + width/2 + Math.sin(i * 0.1) * 3, y + i + 7, x + width, y + i);
+                    } else {
+                        ctx.moveTo(x + i, y);
+                        ctx.quadraticCurveTo(x + i + 7, y + height/2 + Math.sin(i * 0.1) * 3, x + i, y + height);
+                    }
+                    ctx.stroke();
+                }
+            }
+            
+            // COLONNES PRINCIPALES AVEC RELIEF ET OMBRES
+            // Colonne gauche
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 8;
+            ctx.shadowOffsetY = 5;
+            drawWoodTexture(45, 80, 45, 620, true);
+            
+            // Détails sculptés sur la colonne
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#654321';
+            for (let i = 0; i < 6; i++) {
+                ctx.fillRect(48, 120 + i * 80, 39, 3);
+                ctx.fillRect(55, 110 + i * 80, 25, 2);
+            }
+            
+            // Colonne droite
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = -8;
+            ctx.shadowOffsetY = 5;
+            drawWoodTexture(canvas.width - 90, 80, 45, 620, true);
+            
+            // Détails sculptés sur la colonne droite
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#654321';
+            for (let i = 0; i < 6; i++) {
+                ctx.fillRect(canvas.width - 87, 120 + i * 80, 39, 3);
+                ctx.fillRect(canvas.width - 80, 110 + i * 80, 25, 2);
+            }
+            
+            // POUTRES HORIZONTALES AVEC DÉTAILS ARCHITECTURAUX
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetY = 5;
+            drawWoodTexture(45, 140, canvas.width - 90, 25, false);
+            drawWoodTexture(45, 190, canvas.width - 90, 25, false);
+            
+            // Supports décoratifs
+            ctx.shadowBlur = 0;
+            for (let x = 100; x < canvas.width - 100; x += 80) {
+                drawWoodTexture(x - 3, 135, 6, 35, true);
+            }
+            
+            // SOL EN BOIS MARRON ÉLÉGANT
+            function drawWoodFloor(x, y, width, height) {
+                // Base du sol en bois marron
+                const floorGradient = ctx.createLinearGradient(x, y, x + width, y + height);
+                floorGradient.addColorStop(0, '#8B4513'); // Marron classique
+                floorGradient.addColorStop(0.3, '#A0522D'); // Marron saddlebrown
+                floorGradient.addColorStop(0.7, '#8B4513'); // Marron moyen
+                floorGradient.addColorStop(1, '#654321'); // Marron foncé
+                ctx.fillStyle = floorGradient;
+                ctx.fillRect(x, y, width, height);
+                
+                // Bordure décorative
+                ctx.strokeStyle = '#5D4037';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x + 2, y + 2, width - 4, height - 4);
+                
+                // Texture de bois (planches)
+                ctx.strokeStyle = 'rgba(101, 67, 33, 0.6)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < width; i += 4) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + i, y);
+                    ctx.lineTo(x + i, y + height);
+                    ctx.stroke();
+                }
+                
+                // Joints de planches horizontaux
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 2;
+                for (let j = 0; j < height; j += 35) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + 8, y + j);
+                    ctx.lineTo(x + width - 8, y + j);
+                    ctx.stroke();
+                }
+                
+                // Reflets sur le bois poli
+                ctx.fillStyle = 'rgba(139, 69, 19, 0.1)';
+                ctx.fillRect(x, y, width, 3);
+            }
+            
+            // Sol principal en bois marron
+            const floorW = 160;
+            const floorH = 80;
+            for (let x = 0; x < canvas.width; x += floorW) {
+                for (let y = 680; y < canvas.height; y += floorH) {
+                    drawWoodFloor(x, y, floorW, floorH);
+                }
+            }
+            
+            // PLATEFORMES EN BOIS NOBLE AVEC RELIEF
+            function drawPlatform(x, y, width, height) {
+                // Ombre de la plateforme
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(x + 3, y + 3, width, height);
+                
+                // Base de la plateforme
+                const platformGradient = ctx.createLinearGradient(x, y, x, y + height);
+                platformGradient.addColorStop(0, '#D2691E');
+                platformGradient.addColorStop(0.5, '#CD853F');
+                platformGradient.addColorStop(1, '#A0522D');
+                ctx.fillStyle = platformGradient;
+                ctx.fillRect(x, y, width, height);
+                
+                // Planches individuelles avec joints
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < width; i += 28) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + i, y);
+                    ctx.lineTo(x + i, y + height);
+                    ctx.stroke();
+                }
+                
+                // Reflets sur le bois
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.fillRect(x, y, width, 2);
+            }
+            
+            // Plateformes accessibles avec des hauteurs réalistes pour le saut
+            drawPlatform(280, 600, 220, 20); // Plateforme gauche - plus basse et plus large
+            drawPlatform(680, 480, 220, 20); // Plateforme droite - hauteur accessible
+            drawPlatform(480, 380, 220, 20); // Plateforme centrale - progression logique
+            
+            // LANTERNES JAPONAISES DÉTAILLÉES AVEC LUEUR DYNAMIQUE (SANS BONUS TACTIQUES)
+            function drawLantern(x, y, symbol) {
+                const glowIntensity = 0.7 + 0.3 * Math.sin(time * 2);
+                
+                // Lueur externe animée (purement décorative)
+                const outerGlow = ctx.createRadialGradient(x, y + 25, 0, x, y + 25, 100);
+                outerGlow.addColorStop(0, `rgba(255, 180, 100, ${glowIntensity * 0.4})`);
+                outerGlow.addColorStop(0.5, `rgba(255, 200, 120, ${glowIntensity * 0.2})`);
+                outerGlow.addColorStop(1, 'rgba(255, 220, 150, 0)');
+                ctx.fillStyle = outerGlow;
+                ctx.fillRect(x - 80, y - 50, 160, 150);
+                
+                // Structure de la lanterne
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(x - 25, y, 50, 60);
+                
+                // Papier lumineux avec gradient chaud
+                const paperGradient = ctx.createRadialGradient(x, y + 30, 0, x, y + 30, 20);
+                paperGradient.addColorStop(0, `rgba(255, 220, 180, ${glowIntensity})`);
+                paperGradient.addColorStop(0.7, `rgba(255, 200, 150, ${glowIntensity * 0.8})`);
+                paperGradient.addColorStop(1, `rgba(255, 180, 120, ${glowIntensity * 0.6})`);
+                ctx.fillStyle = paperGradient;
+                ctx.fillRect(x - 20, y + 5, 40, 50);
+                
+                // Détails métalliques
+                ctx.fillStyle = '#654321';
+                ctx.fillRect(x - 25, y, 50, 3);
+                ctx.fillRect(x - 25, y + 57, 50, 3);
+                ctx.fillRect(x - 2, y, 4, 60);
+                
+                // Symbole avec effet lumineux
+                ctx.fillStyle = '#8B0000';
+                ctx.font = 'bold 18px serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(symbol, x, y + 35);
+                
+                // Corde
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(x, y - 30);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }
+            
+            drawLantern(200, 170, '武');
+            drawLantern(canvas.width - 200, 170, '道');
+            
+            // PANNEAUX DÉCORATIFS SCULPTÉS
+            function drawPanel(x, y, symbol) {
+                // Ombre du panneau
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                ctx.fillRect(x + 3, y + 3, 90, 80);
+                
+                // Cadre du panneau
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(x, y, 90, 80);
+                
+                // Surface sculptée
+                const panelGradient = ctx.createLinearGradient(x, y, x + 90, y + 80);
+                panelGradient.addColorStop(0, '#D2691E');
+                panelGradient.addColorStop(0.5, '#CD853F');
+                panelGradient.addColorStop(1, '#A0522D');
+                ctx.fillStyle = panelGradient;
+                ctx.fillRect(x + 8, y + 8, 74, 64);
+                
+                // Motifs décoratifs
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x + 12, y + 12, 66, 56);
+                
+                // Symbole central avec relief
+                ctx.fillStyle = '#2C1810';
+                ctx.font = 'bold 24px serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(symbol, x + 45, y + 50);
+                
+                // Highlight pour l'effet 3D
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.fillRect(x, y, 90, 2);
+                ctx.fillRect(x, y, 2, 80);
+            }
+            
+            drawPanel(110, 240, '忍');
+            drawPanel(canvas.width - 200, 240, '者');
+            
+            // EFFETS DE PARTICULES FLOTTANTES (poussière/cendre)
+            for (let i = 0; i < 15; i++) {
+                const particleX = (i * 67 + time * 20) % canvas.width;
+                const particleY = 100 + i * 40 + Math.sin(time + i) * 30;
+                const size = 1 + Math.sin(time * 2 + i) * 0.5;
+                
+                ctx.fillStyle = `rgba(200, 180, 160, ${0.3 + Math.sin(time + i) * 0.2})`;
+                ctx.beginPath();
+                ctx.arc(particleX, particleY, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Reflets et ombres douces sur le sol
+            const reflectionGradient = ctx.createLinearGradient(0, 680, 0, 680 + 30);
+            reflectionGradient.addColorStop(0, 'rgba(255, 248, 220, 0.08)');
+            reflectionGradient.addColorStop(1, 'rgba(255, 248, 220, 0)');
+            ctx.fillStyle = reflectionGradient;
+            ctx.fillRect(0, 680, canvas.width, 30);
+            
+            // Ombres portées des colonnes
+            const shadowGradient = ctx.createLinearGradient(80, 680, 120, 680);
+            shadowGradient.addColorStop(0, 'rgba(0, 0, 0, 0.15)');
+            shadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = shadowGradient;
+            ctx.fillRect(80, 680, 40, canvas.height - 680);
+            
+            const shadowGradient2 = ctx.createLinearGradient(canvas.width - 120, 680, canvas.width - 80, 680);
+            shadowGradient2.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            shadowGradient2.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
+            ctx.fillStyle = shadowGradient2;
+            ctx.fillRect(canvas.width - 120, 680, 40, canvas.height - 680);
+            
+            // RESET SHADOW POUR NE PAS AFFECTER LE RESTE
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+
+        // 🥊 AFFICHAGE DU SYSTÈME DE ROUNDS
+        function renderRoundSystem(ctx) {
+            // AFFICHAGE PERMANENT DU SCORE ET ROUND
+            ctx.save();
+            
+            // Panneau de score en haut au centre
+            const panelWidth = 300;
+            const panelHeight = 80;
+            const panelX = (canvas.width - panelWidth) / 2;
+            const panelY = 10;
+            
+            // Fond du panneau avec gradient
+            const panelGradient = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelHeight);
+            panelGradient.addColorStop(0, 'rgba(0, 0, 0, 0.8)');
+            panelGradient.addColorStop(1, 'rgba(50, 30, 20, 0.9)');
+            ctx.fillStyle = panelGradient;
+            ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+            
+            // Bordure dorée
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+            
+            // Titre du round
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`ROUND ${roundSystem.currentRound}`, panelX + panelWidth/2, panelY + 25);
+            
+            // Score des joueurs
+            ctx.font = 'bold 16px Arial';
+            ctx.fillStyle = '#FFFFFF';
+            
+            // Joueur 1 (gauche)
+            ctx.textAlign = 'left';
+            ctx.fillText(`JOUEUR 1`, panelX + 20, panelY + 50);
+            ctx.fillStyle = roundSystem.p1Wins >= 3 ? '#00FF00' : '#FFD700';
+            ctx.fillText(`${roundSystem.p1Wins} Victoires`, panelX + 20, panelY + 70);
+            
+            // Joueur 2 (droite)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.textAlign = 'right';
+            ctx.fillText(`JOUEUR 2`, panelX + panelWidth - 20, panelY + 50);
+            ctx.fillStyle = roundSystem.p2Wins >= 3 ? '#00FF00' : '#FFD700';
+            ctx.fillText(`${roundSystem.p2Wins} Victoires`, panelX + panelWidth - 20, panelY + 70);
+            
+            // ÉCRAN DE RÉSULTAT DE ROUND
+            if (roundSystem.showingRoundResult) {
+                // Overlay semi-transparent
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                if (roundSystem.matchFinished) {
+                    // MATCH TERMINÉ
+                    ctx.save();
+                    ctx.fillStyle = '#FFD700';
+                    ctx.font = 'bold 48px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 3;
+                    
+                    const winnerText = roundSystem.winner === 'player1' ? 'JOUEUR 1 GAGNE!' : 'JOUEUR 2 GAGNE!';
+                    ctx.strokeText(winnerText, canvas.width/2, canvas.height/2 - 50);
+                    ctx.fillText(winnerText, canvas.width/2, canvas.height/2 - 50);
+                    
+                    ctx.font = 'bold 24px Arial';
+                    ctx.fillStyle = '#FFFFFF';
+                    const scoreText = `Score Final: ${roundSystem.p1Wins} - ${roundSystem.p2Wins}`;
+                    ctx.strokeText(scoreText, canvas.width/2, canvas.height/2);
+                    ctx.fillText(scoreText, canvas.width/2, canvas.height/2);
+                    
+                    ctx.font = 'bold 18px Arial';
+                    ctx.fillStyle = '#FFD700';
+                    ctx.strokeText('Appuyez sur R pour un nouveau match', canvas.width/2, canvas.height/2 + 50);
+                    ctx.fillText('Appuyez sur R pour un nouveau match', canvas.width/2, canvas.height/2 + 50);
+                    ctx.restore();
+                    
+                } else {
+                    // TRANSITION DE ROUND - Affichage minimaliste
+                    // Laisser d'abord les animations se jouer sans texte intrusif
+                    
+                    // Seulement afficher l'annonce du prochain round dans les dernières secondes
+                    const timeLeft = Math.ceil((roundSystem.resultDuration - roundSystem.resultTimer) / 1000);
+                    if (timeLeft <= 2) {
+                        ctx.save();
+                        ctx.fillStyle = '#FFD700';
+                        ctx.font = 'bold 28px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.strokeStyle = '#000000';
+                        ctx.lineWidth = 2;
+                        
+                        const roundText = `ROUND ${roundSystem.currentRound + 1}`;
+                        ctx.strokeText(roundText, canvas.width/2, canvas.height/2);
+                        ctx.fillText(roundText, canvas.width/2, canvas.height/2);
+                        ctx.restore();
+                    }
+                }
+            }
+            
+            ctx.restore();
+        }
+
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
@@ -2153,19 +2998,8 @@
                 ctx.restore();
             }
             
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, '#87CEEB');
-            gradient.addColorStop(1, '#98FB98');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#8B4513';
-            ctx.fillRect(0, 700, canvas.width, 100);
-            
-            ctx.fillStyle = '#654321';
-            ctx.fillRect(300, 550, 200, 20);
-            ctx.fillRect(700, 400, 200, 20);
-            ctx.fillRect(500, 300, 200, 20);
+            // Dojo traditionnel japonais magnifique (sans effets tactiques)
+            renderTraditionalDojo(ctx);
             
             for (const projectile of projectiles) {
                 projectile.render(ctx);
@@ -2192,6 +3026,18 @@
                 ctx.restore();
             }
             
+            // 🥊 AFFICHAGE DU SYSTÈME DE ROUNDS
+            renderRoundSystem(ctx);
+            
+            // INSTRUCTIONS SIMPLES (en bas de l'écran)
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('🥊 Attaque: Z/L | Gatling: O/Numpad3 | Saut: Espace/Flèche Haut | R: Nouveau Match', 10, canvas.height - 40);
+            ctx.fillText('🏃 Mouvement: ZQSD / Flèches | Garde: S/Flèche Bas', 10, canvas.height - 20);
+            ctx.restore();
+            
             // Restaurer le contexte du screen shake
             ctx.restore();
         }
@@ -2203,13 +3049,20 @@
                 e.preventDefault();
                 if (players[0]) players[0].chargeSpecialAttack();
             }
+
             if (e.shiftKey && e.code === 'KeyL') {
                 e.preventDefault();
                 if (players[1]) players[1].chargeSpecialAttack();
             }
+
             
             if (e.code === 'KeyR') {
-                location.reload();
+                e.preventDefault();
+                if (roundSystem.matchFinished) {
+                    resetMatch(); // Nouveau match si le précédent est terminé
+                } else {
+                    location.reload(); // Rechargement complet sinon
+                }
             } else if (e.code === 'KeyP') {
                 gameRunning = !gameRunning;
                 if (gameRunning) requestAnimationFrame(gameLoop);

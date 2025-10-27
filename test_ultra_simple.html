@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Ultra Simple</title>
+    <style>
+        body { margin: 0; padding: 20px; background: #000; color: white; }
+        canvas { border: 2px solid #fff; background: #222; }
+    </style>
+</head>
+<body>
+    <h1>TEST ULTRA SIMPLE</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <p>Appuyez sur C pour voir vos sprites spéciaux !</p>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // VOS sprites spéciaux
+        const specialSprites = {};
+        for(let i = 1; i <= 6; i++) {
+            specialSprites[i] = new Image();
+            specialSprites[i].src = `assets/characters/ninja/special/ninja_special${i}.png`;
+            specialSprites[i].onload = () => console.log(`✅ Sprite ${i} chargé`);
+            specialSprites[i].onerror = () => console.log(`❌ Sprite ${i} ERREUR`);
+        }
+        
+        let currentFrame = 1;
+        let animationCounter = 0;
+        let showingSpecial = false;
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'c') {
+                console.log('🔥 DÉCLENCHEMENT ATTAQUE SPÉCIALE !');
+                showingSpecial = true;
+                currentFrame = 1;
+                animationCounter = 0;
+            }
+        });
+        
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (showingSpecial) {
+                animationCounter++;
+                
+                // Changer de sprite toutes les 10 frames
+                if (animationCounter % 10 === 0) {
+                    currentFrame++;
+                    if (currentFrame > 6) {
+                        showingSpecial = false;
+                        currentFrame = 1;
+                    }
+                }
+                
+                // Dessiner le sprite actuel
+                const sprite = specialSprites[currentFrame];
+                if (sprite && sprite.complete) {
+                    ctx.drawImage(sprite, 100, 100, 200, 200);
+                    console.log(`🖼️ Affichage sprite ${currentFrame}`);
+                } else {
+                    // Rectangle de fallback
+                    ctx.fillStyle = '#FF0000';
+                    ctx.fillRect(100, 100, 200, 200);
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = '24px Arial';
+                    ctx.fillText(`SPECIAL ${currentFrame}`, 120, 220);
+                }
+                
+                // Continuer l'animation pendant 90 frames (1.5 secondes)
+                if (animationCounter > 90) {
+                    showingSpecial = false;
+                    animationCounter = 0;
+                }
+            } else {
+                // État normal
+                ctx.fillStyle = '#00FF00';
+                ctx.fillRect(100, 100, 200, 200);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = '24px Arial';
+                ctx.fillText('NORMAL', 150, 220);
+            }
+            
+            // Info debug
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Frame: ${currentFrame} | Animation: ${animationCounter} | Showing: ${showingSpecial}`, 10, 40);
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        gameLoop();
+    </script>
+</body>
+</html>

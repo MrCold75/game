@@ -47,13 +47,13 @@
         <canvas id="gameCanvas" width="1200" height="800" style="display: none;"></canvas>
         
         <div id="controls" style="display: none;">
-            <strong>🥷 NINJA FIGHTER - CONTRÔLES SIMPLIFIÉS</strong><br>
+            <strong>⚔️ FIGHTING GAME - SÉLECTION DE PERSONNAGE</strong><br>
             <span style="color: gold;">🥷 Ninja (P1):</span> A/D=Marche | Q=Dash⬅️ | E=Dash➡️ | ,=Saut | S=Garde | <span style="color: lime;">I=Attaque</span> | J=Uppercut | K=Attaque basse | Z=Spécial | <span style="color: orange;">O=GATLING</span> | <span style="color: cyan;">C=Technique</span><br>
+            <span style="color: silver;">⚔️ Warrior (P1):</span> A/D=Marche | Q=Dash⬅️ | E=Dash➡️ | ,=Saut | S=Garde | <span style="color: orange;">I=COMBO 3-HIT</span> | J=Uppercut | K=Attaque basse | Z=Spécial | O=Gatling | C=Technique<br>
             <span style="color: red;">👹 Démon (P2):</span> Flèches=Mouvement | ↓=Garde | 0=Dash⬅️ | Enter=Dash➡️ | L=Attaque | Numpad1/2/3=Combos<br>
-            <span style="color: cyan;">🔥 GATLING SPECIAL:</span> <span style="color: orange;">Maintenir O = GATLING ATTACK "ORA ORA ORA" (consomme endurance)</span><br>
-            <span style="color: purple;">💪 ENDURANCE:</span> <span style="color: yellow;">Dash=25pts | Gatling=20pts/sec | Régénère après 1s</span><br>
-            <span style="color: yellow;">✨ EFFETS:</span> Dash=Particules cyan | Garde=Aura bleue | Gatling=Explosion orange<br>
-            R: Redémarrer | P: Pause
+            <span style="color: cyan;">🔥 SPÉCIAUX:</span> <span style="color: lime;">Ninja I=Attaque normale</span> | <span style="color: orange;">Warrior I=COMBO 3-HIT (9 frames)</span> | <span style="color: red;">O=GATLING pour tous</span><br>
+            <span style="color: purple;">💪 ENDURANCE:</span> <span style="color: yellow;">Dash=25pts | Gatling=20pts/sec | Combo=15pts | Régénère après 1s</span><br>
+            <span style="color: yellow;">✨ SÉLECTION:</span> <span style="color: cyan;">B/N=Confirmer personnage</span> | <span style="color: lime;">R: Redémarrer | P: Pause</span>
         </div>
         
         <div id="gameInfo" style="display: none;">
@@ -76,6 +76,61 @@
         let timeScale = 1.0;
         let impactEffects = [];
         let time = 0; // Pour les animations du dojo (brouillard, etc.)
+        
+        // 🎮 SYSTÈME DE JEUX STATES
+        let gameState = 'characterSelect'; // 'characterSelect', 'fighting'
+        
+        // 🥊 ÉCRAN DE SÉLECTION DE PERSONNAGES - 2 FIGHTERS
+        let characterSelect = {
+            player1Selection: 0, // Index du personnage sélectionné P1 (0=Ninja)
+            player2Selection: 1, // Index du personnage sélectionné P2 (1=Warrior)
+            player1Confirmed: false,
+            player2Confirmed: false,
+            animationTimer: 0,
+            characters: [
+                {
+                    name: 'Ninja',
+                    type: 'ninja', 
+                    description: 'Rapide et agile',
+                    stats: { speed: 5, power: 3, defense: 3 }
+                },
+                {
+                    name: 'Warrior',
+                    type: 'warrior', 
+                    description: 'Puissant et résistant',
+                    stats: { speed: 2, power: 5, defense: 5 }
+                }
+            ]
+        };
+        
+        // ✨ SYSTÈME DE PARTICULES DYNAMIQUES
+        let particles = []; // Tableau pour particules style Tekken
+        
+        // 🎬 SYSTÈME DE CAMÉRA DYNAMIQUE
+        let camera = {
+            x: 0,
+            y: 0,
+            scale: 1.0,
+            targetScale: 1.0,
+            shakeX: 0,
+            shakeY: 0,
+            shakeIntensity: 0,
+            isSpecialCamera: false,
+            specialProgress: 0,
+            targetPlayer: null
+        };
+        
+        // � SYSTÈME DE FREEZE FRAMES (HITSTOP)
+        let freezeFrame = {
+            active: false,
+            duration: 0,
+            flashWhite: false,
+            flashDuration: 0
+        };
+        
+        // �🤖 IA SIMPLE POUR TESTS
+        let aiEnabled = false;
+        let aiTimer = 0;
         
         // SYSTÈME DE ROUNDS PROFESSIONNEL 🥊
         let roundSystem = {
@@ -134,17 +189,41 @@
             'ninja_dash1.png', 'ninja_dash2.png', 'ninja_dash3.png',
             // Sprites de shield/garde
             'ninja_shield1.png', 'ninja_shield2.png', 'ninja_shield3.png',
-            // Sprites de victoire et défaite 🎉😢 (9 victory, 4 defeat)
+            // Sprites de victoire et défaite 🎉😢 (9 victory, 5 defeat)
             'ninja_victory1.png', 'ninja_victory2.png', 'ninja_victory3.png', 'ninja_victory4.png', 'ninja_victory5.png',
             'ninja_victory6.png', 'ninja_victory7.png', 'ninja_victory8.png', 'ninja_victory9.png',
-            'ninja_defeat1.png', 'ninja_defeat2.png', 'ninja_defeat3.png', 'ninja_defeat4.png',
+            'ninja_defeat1.png', 'ninja_defeat2.png', 'ninja_defeat3.png', 'ninja_defeat4.png', 'ninja_defeat5.png',
             'demon_victory1.png', 'demon_victory2.png', 'demon_victory3.png', 'demon_victory4.png', 'demon_victory5.png',
             'demon_victory6.png', 'demon_victory7.png', 'demon_victory8.png', 'demon_victory9.png',
             'demon_defeat1.png', 'demon_defeat2.png', 'demon_defeat3.png', 'demon_defeat4.png',
-            // Sprites spéciaux (fallback vers attack si pas trouvé)
-            'special/ninja_special1.png', 'special/ninja_special2.png', 'special/ninja_special3.png',
-            'special/ninja_special4.png', 'special/ninja_special5.png', 'special/ninja_special6.png'
-            // Plus besoin de sprite projectile - pure énergie maintenant ! ✨
+            // Sprites spéciaux
+            'assets/characters/ninja/special/ninja_special1.png', 'assets/characters/ninja/special/ninja_special2.png', 'assets/characters/ninja/special/ninja_special3.png',
+            'assets/characters/ninja/special/ninja_special4.png', 'assets/characters/ninja/special/ninja_special5.png', 'assets/characters/ninja/special/ninja_special6.png',
+            // Sprites uppercut, low et double
+            'assets/characters/ninja/special/ninja_uppercut1.png', 'assets/characters/ninja/special/ninja_uppercut2.png', 'assets/characters/ninja/special/ninja_uppercut3.png',
+            'assets/characters/ninja/special/ninja_low1.png', 'assets/characters/ninja/special/ninja_low2.png', 'assets/characters/ninja/special/ninja_low3.png',
+            'assets/characters/ninja/special/ninja_double1.png', 'assets/characters/ninja/special/ninja_double2.png', 'assets/characters/ninja/special/ninja_double3.png',
+            
+            // 🗡️ SPRITES WARRIOR - NOUVEAU SYSTÈME AVEC FRAMES
+            'warrior_idle1.png', 'warrior_idle2.png', 'warrior_idle3.png', 'warrior_idle4.png',
+            'warrior_walk1.png', 'warrior_walk2.png', 'warrior_walk3.png', 'warrior_walk4.png',
+            'warrior_walk5.png', 'warrior_walk6.png', 'warrior_walk7.png', 'warrior_walk8.png',
+            'warrior_jump1.png', 'warrior_jump2.png', 'warrior_jump3.png', 'warrior_jump4.png', 'warrior_jump5.png',
+            'warrior_hurt1.png', 'warrior_hurt2.png', 'warrior_hurt3.png',
+            'warrior_dash1.png', 'warrior_dash2.png', 'warrior_dash3.png',
+            'warrior_shield1.png', 'warrior_shield2.png', 'warrior_shield3.png',
+            'warrior_defeat1.png', 'warrior_defeat2.png', 'warrior_defeat3.png', 'warrior_defeat4.png',
+            'warrior_getup1.png', 'warrior_getup2.png', 'warrior_getup3.png', 'warrior_getup4.png',
+            
+            // ⚔️ SPRITES WARRIOR COMBAT - COMBO 3-HIT (9 frames) - CHEMINS COMPLETS
+            'warrior_combo1.png', 'warrior_combo2.png', 'warrior_combo3.png', 'warrior_combo4.png', 'warrior_combo5.png',
+            'warrior_combo6.png', 'warrior_combo7.png', 'warrior_combo8.png', 'warrior_combo9.png',
+            
+            // 🥊 SPRITES WARRIOR ATTAQUES DE BASE
+            'warrior_attack1.png', 'warrior_attack2.png', 'warrior_attack3.png', 'warrior_attack4.png',
+            'warrior_uppercut1.png', 'warrior_uppercut2.png', 'warrior_uppercut3.png', 'warrior_uppercut4.png',
+            'warrior_low1.png', 'warrior_low2.png', 'warrior_low3.png', 'warrior_low4.png',
+            'warrior_special1.png', 'warrior_special2.png', 'warrior_special3.png', 'warrior_special4.png', 'warrior_special5.png', 'warrior_special6.png', 'warrior_special7.png'
         ];
         
         // Fonction pour obtenir le chemin correct selon la nouvelle organisation
@@ -160,12 +239,13 @@
                 'icon': 'basic',
                 'attack': 'combat',
                 'gatling': 'combat', // Nouveau : sprites Gatling dans combat
+                'combo': 'combat',   // ⚔️ WARRIOR : sprites Combo dans combat
                 'hurt': 'combat',
                 'uppercut': 'special',
                 'low': 'special',
                 'double': 'special',
                 'down': 'special',
-                'getup': 'special',
+                'getup': 'getup',     // WARRIOR : getup dans son propre dossier
                 'dash': 'dash',
                 'shield': 'shield',
                 'victory': 'victory', // Nouvelles animations de victoire 🎉
@@ -185,17 +265,410 @@
             return `${character}/${category}/${spriteName}`;
         }
 
+        // ✨ FONCTIONS UTILITAIRES POUR EFFETS AVANCÉS
+        
+        // 🎬 CAMÉRA DYNAMIQUE POUR ATTAQUES SPÉCIALES
+        function startSpecialCamera(player) {
+            camera.isSpecialCamera = true;
+            camera.specialProgress = 0;
+            camera.targetScale = 1.5; // Zoom avant
+            camera.shakeIntensity = 15; // Screen shake intense
+            camera.targetPlayer = player; // NOUVEAU : Suivre ce joueur
+            timeScale = 0.3; // Slow motion
+            
+            console.log(`🎬 CAMÉRA SPÉCIALE activée pour ${player.type}!`);
+        }
+        
+        function updateSpecialCamera() {
+            if (!camera.isSpecialCamera) return;
+            
+            camera.specialProgress += 0.03; // Progression de l'effet
+            
+            // Zoom progressif
+            camera.scale += (camera.targetScale - camera.scale) * 0.1;
+            
+            // NOUVEAU : Suivre le joueur qui attaque
+            if (camera.targetPlayer) {
+                const targetX = camera.targetPlayer.x + camera.targetPlayer.width / 2;
+                const targetY = camera.targetPlayer.y + camera.targetPlayer.height / 2;
+                
+                // Interpolation douce vers la position du joueur
+                camera.x += (targetX - canvas.width / 2 - camera.x) * 0.15;
+                camera.y += (targetY - canvas.height / 2 - camera.y) * 0.15;
+            }
+            
+            // Screen shake qui diminue
+            if (camera.shakeIntensity > 0) {
+                camera.shakeX = (Math.random() - 0.5) * camera.shakeIntensity;
+                camera.shakeY = (Math.random() - 0.5) * camera.shakeIntensity;
+                camera.shakeIntensity *= 0.95; // Diminue progressivement
+            }
+            
+            // Fin de l'effet spécial
+            if (camera.specialProgress > 1.0) {
+                endSpecialCamera();
+            }
+        }
+        
+        function endSpecialCamera() {
+            camera.isSpecialCamera = false;
+            camera.targetScale = 1.0; // Retour au zoom normal
+            camera.scale = 1.0; // INSTANTANÉ : pas de transition progressive
+            camera.shakeIntensity = 0;
+            camera.shakeX = 0;
+            camera.shakeY = 0;
+            camera.targetPlayer = null; // Arrêter de suivre
+            
+            // Retour instantané au centre
+            camera.x = 0;
+            camera.y = 0;
+            
+            // Retour à la vitesse normale également instantané
+            timeScale = 1.0;
+            
+            console.log(`🎬 CAMÉRA SPÉCIALE terminée - DÉZOOM INSTANTANÉ!`);
+        }
+        
+        function applyScreenShake(intensity) {
+            camera.shakeIntensity = Math.max(camera.shakeIntensity, intensity);
+        }
+        
+        // 🥊 SYSTÈME DE FREEZE FRAMES POUR IMPACTS PUISSANTS
+        function triggerFreezeFrame(duration, withFlash = false, flashDuration = 50) {
+            freezeFrame.active = true;
+            freezeFrame.duration = duration;
+            freezeFrame.flashWhite = withFlash;
+            freezeFrame.flashDuration = withFlash ? flashDuration : 0;
+            
+            console.log(`🥊 FREEZE FRAME: ${duration}ms ${withFlash ? '+ Flash Blanc' : ''}`);
+        }
+        
+        function updateFreezeFrame(deltaTime) {
+            if (!freezeFrame.active) return 1.0; // Vitesse normale
+            
+            // Décompter le freeze
+            freezeFrame.duration -= deltaTime;
+            
+            // Décompter le flash
+            if (freezeFrame.flashWhite && freezeFrame.flashDuration > 0) {
+                freezeFrame.flashDuration -= deltaTime;
+                if (freezeFrame.flashDuration <= 0) {
+                    freezeFrame.flashWhite = false;
+                }
+            }
+            
+            // Fin du freeze frame
+            if (freezeFrame.duration <= 0) {
+                freezeFrame.active = false;
+                freezeFrame.flashWhite = false;
+                console.log(`🥊 FREEZE FRAME terminé`);
+                return 1.0;
+            }
+            
+            return 0.0; // Arrêt total pendant le freeze
+        }
+        
+        function renderFreezeEffects(ctx) {
+            // Flash blanc sur tout l'écran
+            if (freezeFrame.flashWhite && freezeFrame.flashDuration > 0) {
+                ctx.save();
+                const alpha = Math.min(0.8, freezeFrame.flashDuration / 50); // Fade out
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+                
+                console.log(`⚡ Flash blanc: alpha ${alpha.toFixed(2)}`);
+            }
+        }
+        
+        // 🎵 SYSTÈME AUDIO SYNTHÉTIQUE - SONS JUTEUX !
+        let audioContext = null;
+        let masterVolume = 0.3;
+        
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('🎵 Audio Context initialisé !');
+            }
+        }
+        
+        // 🥊 SONS D'IMPACT SYNTHÉTIQUES - VERSION BRUTALE !
+        function playImpactSound(damage, isBlocked = false, isCritical = false) {
+            if (!audioContext) return;
+            
+            if (isBlocked) {
+                // Son métallique dur pour les blocks
+                playMetallicClang();
+                console.log('🛡️ CLANG métallique !');
+            } else if (isCritical) {
+                // Son explosif brutal pour les critiques
+                playExplosiveHit();
+                console.log('💥 EXPLOSION !');
+            } else {
+                // Son de coup de poing charnu
+                playMeatyPunch(damage);
+                console.log(`🥊 PUNCH charnu: ${damage} dégâts`);
+            }
+        }
+        
+        // 🥩 SON DE COUP DE POING CHARNU
+        function playMeatyPunch(damage) {
+            // Bruit blanc pour simuler l'impact charnu
+            const bufferSize = audioContext.sampleRate * 0.1; // 100ms
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            // Générer du bruit blanc avec enveloppe
+            for (let i = 0; i < bufferSize; i++) {
+                const envelope = Math.exp(-i / (bufferSize * 0.3)); // Decay rapide
+                data[i] = (Math.random() * 2 - 1) * envelope * 0.5;
+            }
+            
+            const source = audioContext.createBufferSource();
+            const gainNode = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            source.buffer = buffer;
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(300 + damage * 10, audioContext.currentTime); // Plus grave = plus de dégâts
+            
+            const volume = Math.min(0.6, 0.3 + (damage * 0.01)) * masterVolume;
+            gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+            
+            source.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            source.start();
+        }
+        
+        // 🔨 SON MÉTALLIQUE POUR BLOCKS
+        function playMetallicClang() {
+            const oscillator1 = audioContext.createOscillator();
+            const oscillator2 = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            // Deux fréquences pour créer un son métallique
+            oscillator1.frequency.setValueAtTime(2000, audioContext.currentTime);
+            oscillator2.frequency.setValueAtTime(2400, audioContext.currentTime);
+            
+            oscillator1.type = 'square';
+            oscillator2.type = 'square';
+            
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(1800, audioContext.currentTime);
+            filter.Q.setValueAtTime(10, audioContext.currentTime);
+            
+            gainNode.gain.setValueAtTime(0.4 * masterVolume, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
+            
+            oscillator1.connect(filter);
+            oscillator2.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator1.start();
+            oscillator2.start();
+            oscillator1.stop(audioContext.currentTime + 0.05);
+            oscillator2.stop(audioContext.currentTime + 0.05);
+        }
+        
+        // 💥 SON EXPLOSIF POUR CRITIQUES
+        function playExplosiveHit() {
+            // Combinaison de bruit et de basse fréquence
+            const bufferSize = audioContext.sampleRate * 0.15;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            for (let i = 0; i < bufferSize; i++) {
+                const envelope = Math.exp(-i / (bufferSize * 0.2));
+                const noise = (Math.random() * 2 - 1) * envelope;
+                const bass = Math.sin(2 * Math.PI * 60 * i / audioContext.sampleRate) * envelope;
+                data[i] = (noise * 0.7 + bass * 0.8) * 0.8;
+            }
+            
+            const source = audioContext.createBufferSource();
+            const gainNode = audioContext.createGain();
+            
+            source.buffer = buffer;
+            gainNode.gain.setValueAtTime(0.7 * masterVolume, audioContext.currentTime);
+            
+            source.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            source.start();
+        }
+        
+        // 💨 SON DE WHOOSH (coup qui rate) - VERSION COMBAT
+        function playWhooshSound() {
+            if (!audioContext) return;
+            
+            // Bruit filtré pour simuler l'air qui se déplace
+            const bufferSize = audioContext.sampleRate * 0.2; // 200ms
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            for (let i = 0; i < bufferSize; i++) {
+                const progress = i / bufferSize;
+                const envelope = Math.sin(progress * Math.PI); // Enveloppe en cloche
+                data[i] = (Math.random() * 2 - 1) * envelope * 0.3;
+            }
+            
+            const source = audioContext.createBufferSource();
+            const gainNode = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            source.buffer = buffer;
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(500, audioContext.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(1500, audioContext.currentTime + 0.2);
+            
+            gainNode.gain.setValueAtTime(0.25 * masterVolume, audioContext.currentTime);
+            
+            source.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            source.start();
+            
+            console.log('💨 SWOOSH de combat !');
+        }
+        
+        // ⚡ SON DE CHARGE SPÉCIALE - VERSION ÉNERGÉTIQUE
+        function playChargeSound() {
+            if (!audioContext) return;
+            
+            // Son de montée en puissance avec harmoniques
+            const oscillator1 = audioContext.createOscillator();
+            const oscillator2 = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            // Fréquence fondamentale qui monte
+            oscillator1.frequency.setValueAtTime(80, audioContext.currentTime);
+            oscillator1.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.6);
+            
+            // Harmonique pour enrichir le son
+            oscillator2.frequency.setValueAtTime(120, audioContext.currentTime);
+            oscillator2.frequency.exponentialRampToValueAtTime(300, audioContext.currentTime + 0.6);
+            
+            oscillator1.type = 'sawtooth';
+            oscillator2.type = 'triangle';
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(400, audioContext.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.6);
+            
+            // Enveloppe qui monte et redescend
+            gainNode.gain.setValueAtTime(0.05 * masterVolume, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.3 * masterVolume, audioContext.currentTime + 0.4);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.6);
+            
+            oscillator1.connect(filter);
+            oscillator2.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator1.start();
+            oscillator2.start();
+            oscillator1.stop(audioContext.currentTime + 0.6);
+            oscillator2.stop(audioContext.currentTime + 0.6);
+            
+            console.log('⚡ CHARGE ÉNERGÉTIQUE !');
+        }
+        
+        // 💥 CRÉATION D'IMPACT STYLE TEKKEN
+        function createImpactBurst(x, y, type = 'impact') {
+            // Explosion rapide de 6-8 particules
+            const count = 6 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < count; i++) {
+                const offsetX = (Math.random() - 0.5) * 30;
+                const offsetY = (Math.random() - 0.5) * 30;
+                particles.push(new Particle(x + offsetX, y + offsetY, type));
+            }
+        }
+        
+        function checkWallBounce(player) {
+            // Murs gauche et droite du canvas
+            if (player.x <= 0 && player.vx < 0) {
+                player.x = 0;
+                player.vx = -player.vx * 0.7; // Rebond avec perte d'énergie
+                player.isWallBouncing = true;
+                // Particules d'étincelles supprimées
+                console.log(`${player.type}: Wall bounce LEFT!`);
+                return true;
+            }
+            
+            if (player.x + player.width >= canvas.width && player.vx > 0) {
+                player.x = canvas.width - player.width;
+                player.vx = -player.vx * 0.7;
+                player.isWallBouncing = true;
+                // Particules d'étincelles supprimées
+                console.log(`${player.type}: Wall bounce RIGHT!`);
+                return true;
+            }
+            
+            return false;
+        }
+
+        function createFallbackSprite(spriteName) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 80;
+            canvas.height = 80;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#4CAF50';
+            ctx.fillRect(0, 0, 80, 80);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '8px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(spriteName.split('_')[1] || 'SPRITE', 40, 35);
+            ctx.fillText(spriteName.split('_')[2] || '', 40, 50);
+            return canvas;
+        }
+        
         function preloadSprites() {
             totalSprites = spriteList.length;
             document.getElementById('loading').textContent = `⏳ Chargement des sprites... (0/${totalSprites})`;
             
             console.log(`🚀 Début chargement de ${totalSprites} sprites`);
             
+            // Timeout de sécurité - démarrer le jeu après 10 secondes même si pas tout chargé
+            setTimeout(() => {
+                if (spritesLoaded < totalSprites) {
+                    console.warn(`⏰ Timeout atteint. Démarrage avec ${spritesLoaded}/${totalSprites} sprites chargés`);
+                    // Créer des fallbacks pour les sprites manquants
+                    spriteList.forEach(spritePath => {
+                        if (!sprites[spritePath]) {
+                            sprites[spritePath] = createFallbackSprite(spritePath);
+                        }
+                    });
+                    startGame();
+                }
+            }, 10000);
+            
             spriteList.forEach(spritePath => {
                 const img = new Image();
-                const fullPath = spritePath.startsWith('special/') 
-                    ? `assets/characters/skills/${spritePath.replace('special/', '')}`
-                    : `assets/characters/${getSpritePath(spritePath)}`;
+                let fullPath;
+                
+                // Si le chemin commence déjà par assets/, on l'utilise tel quel
+                if (spritePath.startsWith('assets/')) {
+                    fullPath = spritePath;
+                } else if (spritePath.startsWith('skills/')) {
+                    fullPath = `assets/characters/${spritePath}`;
+                } else {
+                    fullPath = `assets/characters/${getSpritePath(spritePath)}`;
+                }
+                
+                // Debug pour les sprites spéciaux
+                if (spritePath.startsWith('skills/')) {
+                    console.log(`🔧 SKILLS sprite: ${spritePath} → ${fullPath}`);
+                }
+                
+                // Debug pour combo sprites
+                if (spritePath.startsWith('combat/')) {
+                    console.log(`⚔️ COMBO sprite: ${spritePath} → ${fullPath}`);
+                }
                 
                 // Debug pour dash et shield
                 if (spritePath.includes('dash') || spritePath.includes('shield')) {
@@ -205,6 +678,9 @@
                 img.onload = () => {
                     sprites[spritePath] = img;
                     spritesLoaded++;
+                    if (spritePath.includes('ninja_special')) {
+                        console.log(`✅ NINJA SPECIAL sprite chargé: ${spritePath} → ${fullPath}`);
+                    }
                     console.log(`✅ Sprite chargé: ${spritePath}`);
                     document.getElementById('loading').textContent = `⏳ Chargement des sprites... (${spritesLoaded}/${totalSprites})`;
                     
@@ -215,7 +691,15 @@
                 
                 img.onerror = () => {
                     console.error(`❌ ERREUR: Sprite non trouvé: ${fullPath}`);
-                    // Utiliser une image de fallback ou rectangle
+                    // Utiliser le sprite de fallback
+                    sprites[spritePath] = createFallbackSprite(spritePath);
+                    spritesLoaded++;
+                    console.log(`⚠️ Sprite fallback créé pour: ${spritePath}`);
+                    document.getElementById('loading').textContent = `⏳ Chargement des sprites... (${spritesLoaded}/${totalSprites})`;
+                    
+                    if (spritesLoaded === totalSprites) {
+                        startGame();
+                    }
                     sprites[spritePath] = null;
                     spritesLoaded++;
                     document.getElementById('loading').textContent = `⏳ Chargement des sprites... (${spritesLoaded}/${totalSprites})`;
@@ -225,7 +709,9 @@
                     }
                 };
                 
-                img.src = fullPath;
+                // 🔄 ANTI-CACHE POUR EDGE - Ajout timestamp
+                const timestamp = Date.now();
+                img.src = fullPath + '?' + timestamp;
             });
         }
         
@@ -240,63 +726,72 @@
             init();
         }
         
-        function getSprite(animationState, frame) {
+        function getSprite(animationState, frame, characterType = 'ninja') {
             let spritePath;
+            
+            // 🗡️ SUPPORT MULTI-PERSONNAGES !
+            const characterPrefix = characterType.toLowerCase() === 'warrior' ? 'warrior' : 'ninja';
+            const characterFolder = characterType.toLowerCase() === 'warrior' ? 'warrior' : 'ninja';
+            
+            // FORCE ABSOLUE : Si c'est special, on utilise VOS sprites !
+            if (animationState === 'special') {
+                spritePath = `assets/characters/${characterFolder}/special/${characterPrefix}_special${frame}.png`;
+                return sprites[spritePath] || sprites[`assets/characters/${characterFolder}/special/${characterPrefix}_special1.png`];
+            }
             
             // Gestion des nouveaux états de combo
             if (animationState === 'uppercut') {
-                spritePath = `ninja_uppercut${frame}.png`;
+                spritePath = `assets/characters/${characterFolder}/special/${characterPrefix}_uppercut${frame}.png`;
                 if (sprites[spritePath]) return sprites[spritePath];
-                spritePath = `ninja_attack${Math.min(frame, 3)}.png`;
+                spritePath = `assets/characters/${characterFolder}/special/${characterPrefix}_uppercut1.png`;
                 return sprites[spritePath] || null;
             } else if (animationState === 'low') {
-                spritePath = `ninja_low${frame}.png`;
+                spritePath = `assets/characters/${characterFolder}/special/${characterPrefix}_low${frame}.png`;
                 if (sprites[spritePath]) return sprites[spritePath];
-                spritePath = `ninja_attack${Math.min(frame, 3)}.png`;
+                spritePath = `assets/characters/${characterFolder}/special/${characterPrefix}_low1.png`;
                 return sprites[spritePath] || null;
             } else if (animationState === 'double') {
-                spritePath = `ninja_double${frame}.png`;
+                spritePath = `assets/characters/${characterFolder}/special/${characterPrefix}_double${frame}.png`;
                 if (sprites[spritePath]) return sprites[spritePath];
-                spritePath = `ninja_attack${Math.min(frame, 3)}.png`;
+                spritePath = `assets/characters/${characterFolder}/special/${characterPrefix}_double1.png`;
                 return sprites[spritePath] || null;
             } else if (animationState === 'down') {
                 // Animation de chute au sol (3 frames)
-                spritePath = `ninja_down${Math.min(frame, 3)}.png`;
+                spritePath = `${characterPrefix}_down${Math.min(frame, 3)}.png`;
                 if (sprites[spritePath]) return sprites[spritePath];
-                spritePath = `ninja_hurt${Math.min(frame, 2)}.png`;
+                spritePath = `${characterPrefix}_hurt${Math.min(frame, 2)}.png`;
                 return sprites[spritePath] || null;
             } else if (animationState === 'getup') {
                 // Animation de récupération (4 frames)
-                spritePath = `ninja_getup${Math.min(frame, 4)}.png`;
+                spritePath = `${characterPrefix}_getup${Math.min(frame, 4)}.png`;
                 if (sprites[spritePath]) return sprites[spritePath];
-                spritePath = `ninja_hurt${Math.min(frame, 2)}.png`;
-                return sprites[spritePath] || null;
-            } else if (animationState === 'special') {
-                spritePath = `special/ninja_special${frame}.png`;
-                if (sprites[spritePath]) return sprites[spritePath];
-                
-                const attackFrame = Math.min(frame, 3);
-                spritePath = `ninja_attack${attackFrame}.png`;
+                spritePath = `${characterPrefix}_hurt${Math.min(frame, 2)}.png`;
                 return sprites[spritePath] || null;
             } else if (animationState === 'gatling') {
                 // Nouveau système Gatling 9 frames - PRIORITÉ ABSOLUE
                 const gatlingFrame = Math.min(Math.max(frame, 1), 9);
-                spritePath = `ninja_gatling${gatlingFrame}.png`;
+                spritePath = `${characterPrefix}_gatling${gatlingFrame}.png`;
                 console.log(`🎯 GATLING: Frame ${gatlingFrame}, Sprite: ${spritePath}, Exists: ${!!sprites[spritePath]}`);
+                return sprites[spritePath] || null;
+            } else if (animationState === 'combo') {
+                // ⚔️ SYSTÈME WARRIOR COMBO 9 frames - UTILISE getSpritePath
+                const comboFrame = Math.min(Math.max(frame, 1), 9);
+                spritePath = `${characterPrefix}_combo${comboFrame}.png`;
+                console.log(`⚔️ COMBO: Frame ${comboFrame}, Sprite: ${spritePath}, Exists: ${!!sprites[spritePath]}`);
                 return sprites[spritePath] || null;
             } else if (animationState === 'dash') {
                 // Pour le dash, utiliser toujours le sprite normal (pas de retournement automatique)
-                spritePath = `ninja_dash${frame}.png`;
+                spritePath = `${characterPrefix}_dash${frame}.png`;
             } else if (animationState === 'shield') {
                 // Pour le shield, utiliser toujours la frame 2 (fixe)
-                spritePath = `ninja_shield2.png`;
+                spritePath = `${characterPrefix}_shield2.png`;
             } else {
-                spritePath = `ninja_${animationState}${frame}.png`;
+                spritePath = `${characterPrefix}_${animationState}${frame}.png`;
             }
             
             // Debug pour walk et jump
             if (animationState === 'walk' || animationState === 'jump' || animationState === 'dash' || animationState === 'shield') {
-                console.log(`🎯 Animation: ${animationState}, Frame: ${frame}, Sprite: ${spritePath}, Exists: ${!!sprites[spritePath]}`);
+                console.log(`🎯 ${characterType.toUpperCase()}: ${animationState} frame ${frame} -> ${spritePath}, exists: ${!!sprites[spritePath]}`);
             }
             
             return sprites[spritePath] || null;
@@ -591,6 +1086,58 @@
             }
         }
 
+        // 💥 CLASSE PARTICLE STYLE TEKKEN - Impact bref et puissant
+        class Particle {
+            constructor(x, y, type = 'impact') {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                
+                // Durée de vie TRÈS courte pour style Tekken
+                this.maxLife = 0.25; // 250ms max
+                this.life = this.maxLife;
+                
+                // Vitesse et direction aléatoire pour dispersion
+                this.vx = (Math.random() - 0.5) * 150;
+                this.vy = (Math.random() - 0.5) * 150;
+                this.size = Math.random() * 4 + 2;
+                
+                // Couleur selon le type
+                if (type === 'impact') {
+                    this.color = `rgba(255, 255, 200, 1.0)`; // Blanc/doré
+                } else if (type === 'special') {
+                    this.color = `rgba(100, 200, 255, 1.0)`; // Bleu ninja
+                }
+                
+                this.gravity = 300; // Chute rapide
+            }
+            
+            update(deltaTime) {
+                const dt = deltaTime / 1000;
+                
+                // Mouvement
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.vy += this.gravity * dt;
+                
+                // Diminution de la vie (rapide !)
+                this.life -= dt;
+                
+                return this.life > 0;
+            }
+            
+            render(ctx) {
+                const alpha = this.life / this.maxLife;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
         // Classe joueur avec sprites fixes
         class FixedPlayer {
             constructor(x, y, type, isPlayer1) {
@@ -696,6 +1243,16 @@
                 this.gatlingAttackSpeed = 80; // ms par frame d'attaque (ULTRA-RAPIDE mitraillette!)
                 this.gatlingCurrentFrame = 1;
                 
+                // ⚔️ SYSTÈME WARRIOR COMBO 3-HIT
+                this.isCombo = false; // État de combo actif
+                this.comboTimer = 0; // Timer simple comme attackTimer
+                this.comboDuration = 0.4; // Durée d'UN coup seulement
+                this.comboWindow = 800; // Fenêtre de 800ms pour enchaîner
+                this.lastComboTime = 0; // Temps du dernier coup
+                this.currentHitDealt = false; // Si le coup actuel a été donné
+                this.comboHitCount = 0; // Nombre de coups portés dans le combo
+                this.comboDamage = 12; // Dégâts par coup du combo
+                
                 // 🦘 SYSTÈME DE DOUBLE SAUT
                 this.canDoubleJump = false;
                 this.hasDoubleJumped = false;
@@ -713,6 +1270,37 @@
                 this.defeatAnimationTimer = 0;
                 this.victoryPoseSpeed = 200; // Vitesse d'animation de victoire (ms par frame) - plus lente pour 9 frames
                 this.defeatPoseSpeed = 300;  // Vitesse d'animation de défaite (ms par frame) - plus lente pour bien voir
+                
+                // ⚔️ SYSTÈME DE CONTRES ET PARADES AVANCÉES
+                this.perfectBlockWindow = 200; // 200ms pour parade parfaite
+                this.perfectBlockTimer = 0;
+                this.isPerfectBlocking = false;
+                this.canCounter = false;
+                this.counterWindow = 300; // 300ms pour contre-attaque après parade
+                this.counterTimer = 0;
+                this.guardBreakThreshold = 5; // 5 coups bloqués = garde cassée
+                this.currentBlockCount = 0;
+                this.isGuardBroken = false;
+                this.guardBreakDuration = 2000; // 2 secondes de vulnérabilité
+                this.guardBreakTimer = 0;
+                
+                // 🦅 SYSTÈME D'ATTAQUES AÉRIENNES
+                this.canAirAttack = false;
+                this.isAirAttacking = false;
+                this.airAttackTimer = 0;
+                this.airAttackDuration = 400;
+                this.airComboCount = 0;
+                this.maxAirCombo = 3;
+                
+                // 👻 SYSTÈME D'ESQUIVE PARFAITE (DASH INVINCIBILITÉ)
+                this.perfectDodgeWindow = 100; // 100ms d'invincibilité au début du dash
+                this.isDodgeInvincible = false;
+                this.dodgeInvincibilityTimer = 0;
+                
+                // 🧱 SYSTÈME DE REBONDS SUR MURS
+                this.canWallBounce = true;
+                this.wallBounceForce = 300;
+                this.isWallBouncing = false;
             }
             
             chargeSpecialAttack() {
@@ -722,6 +1310,13 @@
                     this.specialTimer = 0;
                     this.animationState = 'special';
                     this.updatePhaseDisplay();
+                    
+                    // 🎬 DÉCLENCHEMENT DE LA CAMÉRA DYNAMIQUE !
+                    startSpecialCamera(this);
+                    
+                    // 🎵 SON DE CHARGE SPÉCIALE !
+                    playChargeSound();
+                    
                     console.log(`${this.type} : Début technique spéciale !`);
                 }
             }
@@ -732,6 +1327,9 @@
             }
             
             executeSpecialAttack() {
+                // 🎬 TERMINER L'EFFET DE CAMÉRA SPÉCIALE AVANT LE TIR !
+                endSpecialCamera();
+                
                 const projectileX = this.facingLeft ? this.x - 40 : this.x + this.width;
                 const projectileY = this.y;
                 const direction = this.facingLeft ? -1 : 1;
@@ -759,19 +1357,23 @@
                     this.facingLeft = direction < 0; // Mettre à jour l'orientation !
                     this.animationState = 'dash'; // Utilise l'animation de dash spécifique
                     this.animationFrame = 1; // Commencer à la frame 1
+                    
                     console.log(`${this.type} : Dash ${direction > 0 ? 'droite' : 'gauche'} ! Stamina: ${this.stamina}`);
                 } else if (this.stamina < this.dashStaminaCost) {
                     console.log(`${this.type} : Pas assez d'endurance pour dash ! (${this.stamina}/${this.dashStaminaCost})`);
                 }
             }
             
-            // Système de garde
+            // Système de garde amélioré
             startBlocking(direction) {
-                if (!this.isAttacking && !this.isHurt && !this.isDown && !this.isDashing && this.blockStun <= 0) {
+                if (!this.isAttacking && !this.isHurt && !this.isDown && !this.isDashing && this.blockStun <= 0 && !this.isGuardBroken) {
                     this.isBlocking = true;
                     this.blockDirection = direction;
                     this.animationState = 'shield'; // Utilise l'animation de shield spécifique
                     this.animationFrame = 1; // Commencer à la frame 1
+                    
+                    // 🛡️ Possibilité de parade parfaite si timing correct
+                    this.startPerfectBlock();
                 }
             }
             
@@ -890,7 +1492,69 @@
                     return; // Ne pas traiter d'autres logiques de mouvement
                 }
                 
-                // 🔥 SYSTÈME GATLING INDÉPENDANT - basé sur temps réel
+                // ⚔️ GESTION DES NOUVEAUX SYSTÈMES DE COMBAT AVANCÉ
+                
+                // Timer de parade parfaite
+                if (this.isPerfectBlocking) {
+                    this.perfectBlockTimer -= deltaTime;
+                    if (this.perfectBlockTimer <= 0) {
+                        this.isPerfectBlocking = false;
+                    }
+                }
+                
+                // Timer de contre-attaque
+                if (this.canCounter) {
+                    this.counterTimer -= deltaTime;
+                    if (this.counterTimer <= 0) {
+                        this.canCounter = false;
+                    }
+                }
+                
+                // Timer de garde cassée
+                if (this.isGuardBroken) {
+                    this.guardBreakTimer -= deltaTime;
+                    if (this.guardBreakTimer <= 0) {
+                        this.isGuardBroken = false;
+                        console.log(`🛡️ ${this.type}: Guard recovered!`);
+                    }
+                }
+                
+                // Timer d'attaque aérienne
+                if (this.isAirAttacking) {
+                    this.airAttackTimer -= deltaTime;
+                    if (this.airAttackTimer <= 0) {
+                        this.isAirAttacking = false;
+                    }
+                }
+                
+                // Timer d'invincibilité d'esquive
+                if (this.isDodgeInvincible) {
+                    this.dodgeInvincibilityTimer -= deltaTime;
+                    if (this.dodgeInvincibilityTimer <= 0) {
+                        this.isDodgeInvincible = false;
+                    }
+                }
+                
+                // Reset combo aérien au sol
+                if (this.onGround) {
+                    this.airComboCount = 0;
+                    this.canAirAttack = false;
+                } else {
+                    this.canAirAttack = true;
+                }
+                
+                // Vérification rebond sur murs
+                checkWallBounce(this);
+                
+                // � Mise à jour des particules
+                if (this.particles && this.particles.length > 0) {
+                    this.particles = this.particles.filter(particle => {
+                        particle.update(dt);
+                        return particle.life > 0;
+                    });
+                }
+                
+                // �🔥 SYSTÈME GATLING INDÉPENDANT - basé sur temps réel
                 if (this.isGatling && this.gatlingPhase > 0) {
                     const currentTime = Date.now();
                     
@@ -958,6 +1622,27 @@
                     }
                 }
                 
+                // ⚔️ SYSTÈME WARRIOR COMBO - UN COUP À LA FOIS, il faut enchaîner!
+                if (this.isCombo) {
+                    this.comboTimer += scaledDt;
+                    
+                    // Calculer quelle frame afficher pour CE coup seulement
+                    const progress = this.comboTimer / this.comboDuration; // 0 à 1
+                    const currentFrame = Math.min(Math.floor(progress * 3) + 1 + (this.comboHitCount * 3), 9); // Frames 1-3, 4-6, ou 7-9
+                    this.animationFrame = currentFrame;
+                    
+                    // Déclencher le coup au milieu de l'animation
+                    if (this.comboTimer >= this.comboDuration * 0.5 && !this.currentHitDealt) {
+                        this.performComboHit(this.comboHitCount + 1);
+                        this.currentHitDealt = true; // Marquer ce coup comme donné
+                    }
+                    
+                    // Terminer ce coup et attendre le prochain input
+                    if (this.comboTimer >= this.comboDuration) {
+                        this.finishCurrentComboHit();
+                    }
+                }
+                
                 if (this.specialCooldown > 0) {
                     this.specialCooldown -= deltaTime;
                 }
@@ -976,40 +1661,21 @@
                     this.dashTimer += deltaTime;
                     this.vx = this.dashDirection * this.dashSpeed;
                     
-                    // 💨 Effets de particules pendant le dash !
-                    if (Math.random() < 1.0) { // 100% de chance de créer une particule
-                        for (let i = 0; i < 5; i++) {
-                            const particle = {
-                                x: this.x + Math.random() * this.width,
-                                y: this.y + Math.random() * this.height,
-                                vx: -this.dashDirection * (50 + Math.random() * 100), // Particules vers l'arrière
-                                vy: (Math.random() - 0.5) * 50,
-                                life: 0.3 + Math.random() * 0.2,
-                                maxLife: 0.3 + Math.random() * 0.2,
-                                color: `hsl(${200 + Math.random() * 60}, 100%, ${50 + Math.random() * 30}%)` // Bleu cyan
-                            };
-                            if (!this.dashParticles) this.dashParticles = [];
-                            this.dashParticles.push(particle);
-                        }
-                    }
+                    // Effets de particules supprimés
                     
                     if (this.dashTimer >= this.dashDuration) {
                         this.isDashing = false;
                         this.dashTimer = 0;
-                        this.animationState = 'idle'; // Retour à l'état idle
-                        this.animationFrame = 1;
+                        if (!this.isCombo) { // Ne pas interférer avec le combo warrior
+                            this.animationState = 'idle'; // Retour à l'état idle
+                            this.animationFrame = 1;
+                        }
+                        
+                        // Nettoyage des particules supprimé
                     }
                 }
                 
-                // 💨 Mise à jour des particules de dash
-                if (this.dashParticles) {
-                    this.dashParticles = this.dashParticles.filter(particle => {
-                        particle.life -= deltaTime;
-                        particle.x += particle.vx * deltaTime;
-                        particle.y += particle.vy * deltaTime;
-                        return particle.life > 0;
-                    });
-                }
+                // Mise à jour des particules supprimée
                 
                 if (this.isChargingSpecial) {
                     this.specialTimer += deltaTime;
@@ -1022,12 +1688,16 @@
                         
                         if (this.specialPhase === 5) {
                             this.executeSpecialAttack();
-                        } else if (this.specialPhase > 6) {
+                        } else if (this.specialPhase > 6) { // CORRIGÉ : 6 au lieu de 10 car vous avez 6 sprites
                             this.isChargingSpecial = false;
                             this.specialPhase = 0;
                             this.specialCooldown = this.specialCooldownDuration;
-                            this.animationState = 'idle';
-                            this.animationFrame = 1; // CORRECTION: Commencer à 1, pas 0
+                            if (!this.isCombo) { // Ne pas interférer avec le combo warrior
+                                this.animationState = 'idle';
+                                this.animationFrame = 1; // CORRECTION: Commencer à 1, pas 0
+                            }
+                            
+                            // La caméra est déjà terminée avant le tir, plus besoin ici
                         }
                         
                         this.updatePhaseDisplay();
@@ -1066,19 +1736,38 @@
                 // Empêcher toute action si le joueur est au sol ou se relève
                 if (!this.isDown && !this.isGettingUp) {
                     if (this.isPlayer1) {
-                        // Système de garde (S pour bloquer)
+                        // Système de garde et perfect parry (S pour bloquer)
                         if (keys['KeyS'] && !this.isDashing) {
                             const guardDirection = this.facingLeft ? -1 : 1;
-                            this.startBlocking(guardDirection);
+                            if (!this.isBlocking) {
+                                this.startBlocking(guardDirection);
+                                // Démarrer perfect parry si début de garde
+                                this.startPerfectBlock();
+                                console.log("🛡️ JOUEUR 1 - PERFECT PARRY WINDOW!");
+                            }
                         } else if (!keys['KeyS']) {
                             this.stopBlocking();
                         }
                         
-                        // Système de dash (double tap ou Q/E)
+                        // Système de dash et perfect dodge (double tap ou Q/E)
                         if (keys['KeyQ'] && !this.isBlocking) {
-                            this.startDash(-1); // Dash gauche
+                            // Vérifier perfect dodge timing
+                            const opponent = this.isPlayer1 ? players[1] : players[0];
+                            if (opponent && opponent.isAttacking && Math.abs(opponent.x - this.x) < 80) {
+                                this.startPerfectDodge(-1); // Perfect dodge gauche
+                                console.log("💨 JOUEUR 1 - PERFECT DODGE GAUCHE!");
+                            } else {
+                                this.startDash(-1); // Dash gauche normal
+                            }
                         } else if (keys['KeyE'] && !this.isBlocking) {
-                            this.startDash(1); // Dash droite
+                            // Vérifier perfect dodge timing
+                            const opponent = this.isPlayer1 ? players[1] : players[0];
+                            if (opponent && opponent.isAttacking && Math.abs(opponent.x - this.x) < 80) {
+                                this.startPerfectDodge(1); // Perfect dodge droite
+                                console.log("💨 JOUEUR 1 - PERFECT DODGE DROITE!");
+                            } else {
+                                this.startDash(1); // Dash droite normal
+                            }
                         }
                         
                         // Mouvements normaux (désactivés pendant dash et garde)
@@ -1118,6 +1807,23 @@
                             this.jumpKeyPressed = false; // Réinitialiser quand la touche est relâchée
                         }
                         
+                        // Attaques aériennes (disponibles seulement en l'air)
+                        if (!this.onGround && this.canAirAttack) {
+                            if (keys['KeyI'] && !this.isAirAttacking) {
+                                this.startAirAttack();
+                                console.log("✈️ JOUEUR 1 - AIR ATTACK I!");
+                            } else if (keys['KeyJ'] && !this.isAirAttacking) {
+                                this.startAirAttack();
+                                console.log("✈️ JOUEUR 1 - AIR ATTACK J!");
+                            } else if (keys['KeyK'] && !this.isAirAttacking) {
+                                this.startAirAttack();
+                                console.log("✈️ JOUEUR 1 - AIR ATTACK K!");
+                            } else if (keys['KeyZ'] && !this.isAirAttacking) {
+                                this.startAirAttack();
+                                console.log("✈️ JOUEUR 1 - AIR ATTACK Z!");
+                            }
+                        }
+                        
                         // Touches d'attaque et combos (bloquées pendant garde)
                         if (keys['KeyI'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
@@ -1138,22 +1844,41 @@
                             this.startGatlingAttack();
                         }
                     } else {
-                        // Système de garde (ArrowDown pour bloquer)
+                        // Système de garde et perfect parry (ArrowDown pour bloquer)
                         if (keys['ArrowDown'] && !this.isDashing) {
-                            console.log("🛡️ GARDE ACTIVÉE!");
                             const guardDirection = this.facingLeft ? -1 : 1;
-                            this.startBlocking(guardDirection);
+                            if (!this.isBlocking) {
+                                console.log("🛡️ GARDE ACTIVÉE!");
+                                this.startBlocking(guardDirection);
+                                // Démarrer perfect parry si début de garde
+                                this.startPerfectBlock();
+                                console.log("🛡️ JOUEUR 2 - PERFECT PARRY WINDOW!");
+                            }
                         } else if (!keys['ArrowDown']) {
                             this.stopBlocking();
                         }
                         
-                        // Système de dash (Digit0 et Enter)
+                        // Système de dash et perfect dodge (Digit0 et Enter)
                         if (keys['Digit0'] && !this.isBlocking) {
-                            console.log("💨 DASH GAUCHE!");
-                            this.startDash(-1); // Dash gauche
+                            // Vérifier perfect dodge timing
+                            const opponent = this.isPlayer1 ? players[1] : players[0];
+                            if (opponent && opponent.isAttacking && Math.abs(opponent.x - this.x) < 80) {
+                                this.startPerfectDodge(-1); // Perfect dodge gauche
+                                console.log("💨 JOUEUR 2 - PERFECT DODGE GAUCHE!");
+                            } else {
+                                console.log("💨 DASH GAUCHE!");
+                                this.startDash(-1); // Dash gauche normal
+                            }
                         } else if (keys['Enter'] && !this.isBlocking) {
-                            console.log("💨 DASH DROITE!");
-                            this.startDash(1); // Dash droite
+                            // Vérifier perfect dodge timing
+                            const opponent = this.isPlayer1 ? players[1] : players[0];
+                            if (opponent && opponent.isAttacking && Math.abs(opponent.x - this.x) < 80) {
+                                this.startPerfectDodge(1); // Perfect dodge droite
+                                console.log("💨 JOUEUR 2 - PERFECT DODGE DROITE!");
+                            } else {
+                                console.log("💨 DASH DROITE!");
+                                this.startDash(1); // Dash droite normal
+                            }
                         }
                         
                         // Mouvements normaux (désactivés pendant dash et garde)
@@ -1193,6 +1918,20 @@
                             this.jumpKeyPressedP2 = false; // Réinitialiser quand la touche est relâchée
                         }
                         
+                        // Attaques aériennes pour Player 2 (disponibles seulement en l'air)
+                        if (!this.onGround && this.canAirAttack) {
+                            if (keys['KeyL'] && !this.isAirAttacking) {
+                                this.startAirAttack();
+                                console.log("✈️ JOUEUR 2 - AIR ATTACK L!");
+                            } else if (keys['Numpad1'] && !this.isAirAttacking) {
+                                this.startAirAttack();
+                                console.log("✈️ JOUEUR 2 - AIR ATTACK 1!");
+                            } else if (keys['Numpad2'] && !this.isAirAttacking) {
+                                this.startAirAttack();
+                                console.log("✈️ JOUEUR 2 - AIR ATTACK 2!");
+                            }
+                        }
+                        
                         // Touches d'attaque et combos (bloquées pendant garde)
                         if (keys['KeyL'] && !this.isAttacking && !this.isHurt && !this.isBlocking) {
                             this.handleComboAttack();
@@ -1205,6 +1944,11 @@
                         }
                         if (keys['Numpad3'] && !this.isGatling && !this.isHurt && !this.isBlocking) {
                             this.startGatlingAttack();
+                        }
+                        
+                        // 🤖 IA SIMPLE POUR LE JOUEUR 2 (pour tester les contre-attaques)
+                        if (aiEnabled && !this.isPlayer1) {
+                            this.simpleAI(deltaTime);
                         }
                     }
                 }
@@ -1342,6 +2086,8 @@
                     }
                 } else if (this.isHurt) {
                     newState = 'hurt'; // État blessé
+                } else if (this.isCombo) {
+                    newState = 'combo'; // ⚔️ PRIORITÉ ABSOLUE pour combo warrior
                 } else if (this.isGatling && this.gatlingPhase > 0) {
                     newState = 'gatling'; // PRIORITÉ ABSOLUE pour Gatling avant TOUT
                 } else if (this.isChargingSpecial) {
@@ -1444,29 +2190,34 @@
                     }
                     return;
                 } else if (keys['KeyI']) {
-                    // Attaque normale I
-                    this.comboType = 'normal';
-                    this.comboGCounter = 0; // Reset combo G
-                    this.attack();
-                    console.log(`👊 ${this.type}: ATTAQUE NORMALE I!`);
-                    
-                    // Attaque normale I
-                    if (timeSinceLastAttack < this.comboWindow && timeSinceLastAttack > 50) {
-                        // Double frappe (G+G) - détection améliorée
-                        this.comboType = 'double';
-                        this.isDoubleAttack = true;
-                        this.doubleAttackTimer = 0;
-                        this.attack();
-                        console.log(`${this.type}: DOUBLE FRAPPE! (timing: ${timeSinceLastAttack}ms)`);
+                    // 🥷⚔️ ATTAQUE DIFFÉRENTE SELON LE PERSONNAGE
+                    if (this.type.toLowerCase().includes('warrior')) {
+                        // WARRIOR = COMBO À ENCHAÎNER (il faut appuyer plusieurs fois)
+                        const currentTime = Date.now();
+                        const timeSinceLastCombo = currentTime - (this.lastComboTime || 0);
+                        
+                        if (!this.isCombo && !this.isAttacking) {
+                            // Premier coup OU nouveau combo dans la fenêtre
+                            if (this.comboHitCount === 0 || timeSinceLastCombo <= this.comboWindow) {
+                                console.log(`🔍 Enchaînement ${this.comboHitCount + 1}/3 - Timing: ${timeSinceLastCombo}ms`);
+                                this.startWarriorCombo();
+                            } else {
+                                // Trop tard, recommencer à zéro
+                                console.log(`⏰ Fenêtre expirée (${timeSinceLastCombo}ms > ${this.comboWindow}ms) - Reset`);
+                                this.resetCombo();
+                                this.startWarriorCombo();
+                            }
+                        }
                     } else {
-                        // Attaque normale
-                        this.comboType = 'normal';
-                        this.attack();
-                        console.log(`${this.type}: ATTAQUE NORMALE (timing: ${timeSinceLastAttack}ms)`);
+                        // NINJA = Attaque normale
+                        if (!this.isAttacking) {
+                            this.comboType = 'normal';
+                            this.comboGCounter = 0; // Reset combo G
+                            this.attack();
+                            console.log(`👊 ${this.type}: ATTAQUE NORMALE I!`);
+                        }
                     }
                 }
-                
-                this.lastAttackTime = currentTime;
             }
             
             // 🥊 GATLING ATTACK - Multi-coups rapides avec endurance !
@@ -1523,22 +2274,106 @@
                 }
             }
             
+            // ⚔️ WARRIOR COMBO 3-HIT - SIMPLE COMME ATTAQUE NORMALE
+            startWarriorCombo() {
+                if (this.isCombo) return; // Déjà en combo
+                
+                console.log(`⚔️🔥 ${this.type}: WARRIOR COMBO HIT ${this.comboHitCount + 1}/3 ACTIVÉ!`);
+                
+                this.isCombo = true;
+                this.comboTimer = 0;
+                this.currentHitDealt = false; // Reset pour ce coup
+                this.animationState = 'combo';
+                this.isAttacking = true;
+                this.lastComboTime = Date.now(); // Temps du dernier coup pour la fenêtre
+                
+                console.log(`⚔️ Coup ${this.comboHitCount + 1} démarré - ${this.comboDuration}s`);
+            }
+            
+            // Terminer le coup actuel et préparer le suivant
+            finishCurrentComboHit() {
+                this.comboHitCount++;
+                this.isCombo = false;
+                this.isAttacking = false;
+                this.comboTimer = 0;
+                this.animationState = 'idle';
+                this.animationFrame = 1;
+                
+                console.log(`⚔️ Coup ${this.comboHitCount}/3 terminé. Fenêtre d'enchaînement: ${this.comboWindow}ms`);
+                
+                // Si c'était le 3ème coup, reset complètement
+                if (this.comboHitCount >= 3) {
+                    this.resetCombo();
+                }
+            }
+            
+            // Reset complet du combo
+            resetCombo() {
+                console.log(`🔄 COMBO RESET - ${this.comboHitCount}/3 coups réalisés`);
+                this.comboHitCount = 0;
+                this.lastComboTime = 0;
+            }
+            
+            // Arrêter le combo warrior
+            stopWarriorCombo() {
+                if (this.isCombo) {
+                    this.isCombo = false;
+                    this.isAttacking = false;
+                    this.comboTimer = 0;
+                    this.comboHitCount = 0;
+                    this.animationState = 'idle';
+                    this.animationFrame = 1;
+                }
+            }
+            
+            // Exécuter un coup de combo
+            performComboHit(hitNumber) {
+                // Vérifier si on touche l'adversaire
+                const opponent = this.isPlayer1 ? players[1] : players[0];
+                if (opponent && this.checkCollision(opponent)) {
+                    // 📳 SCREEN SHAKE seulement sur vraie collision !
+                    startScreenShake(150, 8);
+                    
+                    // 🔥 EFFET D'IMPACT seulement sur collision
+                    const attackX = this.x + (this.facingLeft ? -25 : this.width + 25);
+                    const attackY = this.y + this.height/2 - 10;
+                    impactEffects.push(new ImpactEffect(attackX, attackY, 'hit', 250));
+                    
+                    // Dégâts progressifs : Hit 1=12, Hit 2=15, Hit 3=18
+                    const progressiveDamage = this.comboDamage + (hitNumber - 1) * 3;
+                    opponent.takeDamage(progressiveDamage, this);
+                    this.comboHitCount++;
+                    
+                    console.log(`⚔️ Combo hit ${hitNumber} sur ${opponent.type}! Dégâts: ${progressiveDamage}`);
+                    
+                    // Effet de knockback selon le coup
+                    if (hitNumber === 3) {
+                        // Coup final = knockback plus fort
+                        const knockbackForce = this.facingLeft ? -350 : 350;
+                        opponent.vx = knockbackForce;
+                        opponent.vy = -200; // Léger soulèvement
+                        console.log(`💥 COUP FINAL! Knockback: ${knockbackForce}`);
+                    } else {
+                        // Coups intermédiaires = petit stun
+                        const smallKnockback = this.facingLeft ? -150 : 150;
+                        opponent.vx = smallKnockback;
+                    }
+                    
+                    // Son différent selon le coup
+                    if (hitNumber === 3) {
+                        playExplosiveHit(); // Son de coup final explosif
+                    } else {
+                        playMeatyPunch(progressiveDamage); // Son de coup intermédiaire
+                    }
+                } else {
+                    console.log(`💨 Combo hit ${hitNumber} dans le vide`);
+                    playWhooshSound(); // Son de coup qui rate
+                }
+            }
+            
             // Effet visuel pour le gatling
             createGatlingEffect() {
-                // Particules d'impact style "ORA ORA"
-                for (let i = 0; i < 10; i++) {
-                    const particle = {
-                        x: this.x + this.width + (this.facingLeft ? -50 : 20),
-                        y: this.y + Math.random() * this.height,
-                        vx: (this.facingLeft ? -1 : 1) * (100 + Math.random() * 200),
-                        vy: (Math.random() - 0.5) * 100,
-                        life: 0.4,
-                        maxLife: 0.4,
-                        color: `hsl(${30 + Math.random() * 60}, 100%, ${60 + Math.random() * 20}%)` // Orange-jaune
-                    };
-                    if (!this.gatlingParticles) this.gatlingParticles = [];
-                    this.gatlingParticles.push(particle);
-                }
+                // Effets de particules supprimés
             }
             
             // Exécuter un coup de gatling
@@ -1599,42 +2434,54 @@
             }
             
             attack() {
+                // Vérifier si c'est une contre-attaque
+                const isCounterAttack = this.counterOpportunity > 0;
+                
                 this.isAttacking = true;
                 this.attackTimer = 0;
                 this.hasHit = false;
+                
+                // Si c'est une contre-attaque, on l'utilise
+                if (isCounterAttack) {
+                    this.counterOpportunity = 0; // Consommer l'opportunité
+                    this.isCounterAttacking = true;
+                    console.log(`${this.type}: CONTRE-ATTAQUE !`);
+                    this.debugText = "COUNTER!";
+                    this.debugTimer = 60;
+                }
                 
                 // Définir l'état d'animation selon le type de combo
                 switch(this.comboType) {
                     case 'uppercut':
                         this.animationState = 'uppercut';
-                        this.attackDuration = 700; // Uppercut un peu plus long
-                        console.log(`${this.type}: Animation UPPERCUT activée!`);
+                        this.attackDuration = isCounterAttack ? 400 : 700; // Counter plus rapide
+                        console.log(`${this.type}: Animation UPPERCUT ${isCounterAttack ? '(COUNTER)' : ''} activée!`);
                         // Debug visible à l'écran
-                        this.debugText = "UPPERCUT!";
+                        this.debugText = isCounterAttack ? "COUNTER UPPERCUT!" : "UPPERCUT!";
                         this.debugTimer = 60;
                         break;
                     case 'low':
                         this.animationState = 'low';
-                        this.attackDuration = 600; // Attaque basse rapide
-                        console.log(`${this.type}: Animation LOW activée!`);
+                        this.attackDuration = isCounterAttack ? 350 : 600; // Counter plus rapide
+                        console.log(`${this.type}: Animation LOW ${isCounterAttack ? '(COUNTER)' : ''} activée!`);
                         // Debug visible à l'écran
-                        this.debugText = "LOW ATTACK!";
+                        this.debugText = isCounterAttack ? "COUNTER LOW!" : "LOW ATTACK!";
                         this.debugTimer = 60;
                         break;
                     case 'double':
                         this.animationState = 'double';
-                        this.attackDuration = 800; // Plus long pour double frappe
-                        console.log(`${this.type}: Animation DOUBLE activée!`);
+                        this.attackDuration = isCounterAttack ? 450 : 800; // Counter plus rapide
+                        console.log(`${this.type}: Animation DOUBLE ${isCounterAttack ? '(COUNTER)' : ''} activée!`);
                         // Debug visible à l'écran
-                        this.debugText = "DOUBLE HIT!";
+                        this.debugText = isCounterAttack ? "COUNTER DOUBLE!" : "DOUBLE HIT!";
                         this.debugTimer = 60;
                         break;
                     default:
                         this.animationState = 'attack';
-                        this.attackDuration = 500; // Attaque normale
-                        console.log(`${this.type}: Animation ATTACK normale`);
+                        this.attackDuration = isCounterAttack ? 300 : 500; // Counter plus rapide
+                        console.log(`${this.type}: Animation ATTACK ${isCounterAttack ? '(COUNTER)' : ''} normale`);
                         // Debug visible à l'écran
-                        this.debugText = "NORMAL ATTACK";
+                        this.debugText = isCounterAttack ? "COUNTER ATTACK!" : "NORMAL ATTACK";
                         this.debugTimer = 60;
                 }
                 
@@ -1642,7 +2489,14 @@
                 this.animationFrame = 1;
             }
             
-            takeDamage(amount, attackerX = null, knockdownType = null) {
+            takeDamage(amount, attackerX = null, knockdownType = null, attacker = null) {
+                // Vérifier perfect dodge (invincibilité temporaire)
+                if (this.perfectDodgeInvincible) {
+                    console.log(`${this.type} : Perfect dodge ! Invulnérable !`);
+                    // Particules de poussière supprimées
+                    return "perfect_dodge";
+                }
+
                 // Vérifier si l'attaque est bloquée
                 if (this.isBlocking && attackerX !== null) {
                     // Déterminer la direction de l'attaque
@@ -1655,17 +2509,48 @@
                         (attackFromRight && this.blockDirection > 0);
                     
                     if (guardingCorrectDirection) {
-                        // Attaque bloquée !
-                        this.blockStun = this.blockStunDuration;
-                        this.health -= Math.floor(amount * 0.2); // Seulement 20% des dégâts
-                        this.health = Math.max(0, this.health);
+                        // Vérifier perfect parry
+                        const isPerfectParry = this.perfectBlockTimer > 0;
                         
-                        // Petit recul lors du block
-                        const pushback = attackFromLeft ? 50 : -50;
-                        this.vx = pushback;
-                        
-                        console.log(`${this.type} : Attaque bloquée ! Dégâts réduits.`);
-                        return true; // Attaque bloquée
+                        if (isPerfectParry) {
+                            // Perfect parry : aucun dégât, stun l'attaquant et permet un contre
+                            console.log(`${this.type} : PERFECT PARRY ! Contre disponible !`);
+                            // Particules d'étincelles supprimées
+                            this.counterOpportunity = this.counterWindow;
+                            
+                            // Stun l'attaquant si disponible
+                            if (attacker) {
+                                attacker.blockStun = 30; // L'attaquant est stunné
+                            }
+                            
+                            return "perfect_parry";
+                        } else {
+                            // Block normal
+                            this.blockStun = this.blockStunDuration;
+                            this.health -= Math.floor(amount * 0.2); // 20% des dégâts
+                            this.health = Math.max(0, this.health);
+                            
+                            // Incrémenter le compteur de garde
+                            this.guardPressure++;
+                            
+                            // Vérifier guard break
+                            if (this.guardPressure >= this.guardBreakThreshold) {
+                                this.triggerGuardBreak();
+                                console.log(`${this.type} : GARDE CASSÉE !`);
+                                return "guard_break";
+                            }
+                            
+                            // Petit recul lors du block
+                            const pushback = attackFromLeft ? 50 : -50;
+                            this.vx = pushback;
+                            
+                            console.log(`${this.type} : Attaque bloquée ! Garde: ${this.guardPressure}/${this.guardBreakThreshold}`);
+                            
+                            // 🎵 SON DE BLOCK MÉTALLIQUE !
+                            playImpactSound(amount, true, false);
+                            
+                            return "blocked";
+                        }
                     }
                 }
                 
@@ -1673,8 +2558,33 @@
                 this.health -= amount;
                 this.health = Math.max(0, this.health);
                 
+                // 🥊 FREEZE FRAME BASÉ SUR LES DÉGÂTS !
+                const freezeDuration = Math.min(200, amount * 4); // Max 200ms, 4ms par point de dégât
+                const useFlash = amount >= 25; // Flash blanc pour les gros coups
+                triggerFreezeFrame(freezeDuration, useFlash, 80);
+                
+                // Screen shake proportionnel aux dégâts
+                applyScreenShake(amount * 0.8);
+                
+                console.log(`🥊 IMPACT! Dégâts: ${amount} → Freeze: ${freezeDuration}ms ${useFlash ? '+ Flash' : ''}`);
+                
+                // 🎵 SON D'IMPACT JUTEUX !
+                playImpactSound(amount, false, useFlash);
+                
+                // 💥 IMPACT STYLE TEKKEN !
+                createImpactBurst(this.x + this.width/2, this.y + this.height/2, 'impact');
+                
                 // Arrêter la garde si on prend des dégâts
                 this.stopBlocking();
+                
+                // Reset guard pressure après avoir pris des dégâts
+                this.guardPressure = 0;
+                
+                // Vérifier si c'est une attaque aérienne qui touche
+                if (this.isAirborne && knockdownType !== 'air') {
+                    // Forcer un air knockdown
+                    knockdownType = 'air';
+                }
                 
                 // Ne pas forcer l'état hurt si on est déjà knockdown
                 // Le knockdown aura priorité sur l'animation hurt
@@ -1686,12 +2596,18 @@
                     this.isHurt = true;
                 }
                 
-                // Interruption des actions en cours
-                this.isAttacking = false;
+                // Interruption des actions en cours (sauf air attack)
+                if (!this.isAirAttacking) {
+                    this.isAttacking = false;
+                }
                 this.isChargingSpecial = false;
                 this.isDashing = false;
                 
-                return false; // Attaque non bloquée
+                // Annuler perfect dodge si touché
+                this.perfectDodgeInvincible = false;
+                
+                console.log(`${this.type} : Dégâts subis ! HP: ${this.health}`);
+                return "hit"; // Attaque réussie
             }
             
             /**
@@ -1705,8 +2621,8 @@
                 let renderWidth = this.width;
                 let renderHeight = this.height;
                 
-                // Taille standardisée pour les ninjas
-                if (this.type.toLowerCase().includes('ninja')) {
+                // Taille standardisée pour tous les personnages
+                if (this.type.toLowerCase().includes('ninja') || this.type.toLowerCase().includes('warrior')) {
                     renderWidth = 100;
                     renderHeight = 100;
                 }
@@ -1732,24 +2648,33 @@
             }
             
             render(ctx) {
-                // Obtenir le sprite - UTILISER gatlingCurrentFrame en mode Gatling
-                const currentFrame = (this.isGatling && this.gatlingPhase > 0) ? this.gatlingCurrentFrame : this.animationFrame;
-                const sprite = getSprite(this.animationState, currentFrame);
+                // Obtenir le sprite - UTILISER animationFrame mis à jour par le combo
+                const currentFrame = this.animationFrame;
+                const sprite = getSprite(this.animationState, currentFrame, this.type);
+                
+                console.log(`🔍 DEBUG RENDER: type=${this.type}, state=${this.animationState}, frame=${currentFrame}, isCombo=${this.isCombo}`);
                 
                 // Debug pour Gatling - IDENTIFIÉ PAR JOUEUR
                 if (this.isGatling && this.gatlingPhase > 0) {
                     console.log(`🎬 ${this.type} RENDER GATLING: state=${this.animationState}, gatlingFrame=${this.gatlingCurrentFrame}, phase=${this.gatlingPhase}, stamina=${this.stamina.toFixed(1)}`);
                 }
                 
+                // Debug pour Combo
+                if (this.isCombo) {
+                    console.log(`⚔️ ${this.type} RENDER COMBO: state=${this.animationState}, frame=${this.animationFrame}, timer=${this.comboTimer.toFixed(2)}s, hits=${this.comboHitCount}`);
+                }
+                
                 if (sprite) {
                     ctx.save();
+                    
+                    // Effets visuels de garde supprimés
                     
                     // Taille standardisée pour tous les sprites ninja
                     let renderWidth = this.width;
                     let renderHeight = this.height;
                     
-                    if (this.type.toLowerCase().includes('ninja')) {
-                        // Forcer une taille constante pour tous les sprites ninja
+                    if (this.type.toLowerCase().includes('ninja') || this.type.toLowerCase().includes('warrior')) {
+                        // Forcer une taille constante pour tous les sprites
                         renderWidth = 100;  // Taille fixe largeur (agrandie)
                         renderHeight = 100; // Taille fixe hauteur (agrandie)
                     }
@@ -1762,21 +2687,7 @@
                     }
                     ctx.restore();
                     
-                    // 💨 Rendu des particules de dash (sans mise à jour ici)
-                    if (this.dashParticles) {
-                        this.dashParticles.forEach(particle => {
-                            if (particle.life > 0) {
-                                const alpha = particle.life / particle.maxLife;
-                                ctx.save();
-                                ctx.globalAlpha = alpha;
-                                ctx.fillStyle = particle.color;
-                                ctx.beginPath();
-                                ctx.arc(particle.x, particle.y, 3 * alpha, 0, Math.PI * 2);
-                                ctx.fill();
-                                ctx.restore();
-                            }
-                        });
-                    }
+                    // Rendu des particules supprimé
                 } else {
                     // Fallback rectangle
                     ctx.fillStyle = this.isPlayer1 ? 'blue' : 'red';
@@ -1806,39 +2717,9 @@
                     }
                 }
                 
-                // Effet visuel de garde
-                if (this.isBlocking) {
-                    ctx.save();
-                    ctx.strokeStyle = '#00FFFF';
-                    ctx.lineWidth = 3;
-                    ctx.setLineDash([5, 5]);
-                    
-                    // Bouclier frontal
-                    const shieldX = this.facingLeft ? this.x - 10 : this.x + this.width + 10;
-                    const shieldY = this.y + 10;
-                    const shieldWidth = 15;
-                    const shieldHeight = this.height - 20;
-                    
-                    ctx.strokeRect(shieldX - shieldWidth/2, shieldY, shieldWidth, shieldHeight);
-                    ctx.restore();
-                }
+                // Effet visuel de garde supprimé
                 
-                // Effet visuel de dash
-                if (this.isDashing) {
-                    ctx.save();
-                    ctx.strokeStyle = '#FFFF00';
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([2, 2]);
-                    
-                    // Traînée de mouvement
-                    for (let i = 0; i < 3; i++) {
-                        const trailX = this.x - (this.dashDirection * 20 * (i + 1));
-                        const alpha = 1 - (i * 0.3);
-                        ctx.globalAlpha = alpha;
-                        ctx.strokeRect(trailX, this.y, this.width, this.height);
-                    }
-                    ctx.restore();
-                }
+                // Effet visuel de dash supprimé
                 
                 // Cooldown indicators
                 ctx.save();
@@ -1972,6 +2853,7 @@
                 this.victoryAnimationTimer = 0;
                 this.isAttacking = false;
                 this.isGatling = false;
+                this.isCombo = false;
                 this.isBlocking = false;
                 this.isDown = false;
                 this.isGettingUp = false;
@@ -1988,6 +2870,7 @@
                 this.defeatAnimationTimer = 0;
                 this.isAttacking = false;
                 this.isGatling = false;
+                this.isCombo = false;
                 this.isBlocking = false;
                 this.isDown = false;
                 this.isGettingUp = false;
@@ -2004,6 +2887,165 @@
                 this.victoryAnimationTimer = 0;
                 this.defeatAnimationTimer = 0;
             }
+            
+            // ⚔️ NOUVELLES MÉTHODES POUR COMBAT AVANCÉ
+            
+            startPerfectBlock() {
+                if (!this.isBlocking) return false;
+                
+                this.isPerfectBlocking = true;
+                this.perfectBlockTimer = this.perfectBlockWindow;
+                this.canCounter = true;
+                this.counterTimer = this.counterWindow;
+                
+                console.log(`🛡️ ${this.type}: PERFECT BLOCK activé! Window: ${this.perfectBlockWindow}ms`);
+                
+                // Effet visuel de parade parfaite
+                // Particules d'étincelles supprimées
+                return true;
+            }
+            
+            attemptCounter(opponent) {
+                if (!this.canCounter) return false;
+                
+                console.log(`⚔️ ${this.type}: COUNTER ATTACK!`);
+                this.canCounter = false;
+                
+                // Contre-attaque automatique avec bonus dégâts
+                this.attack();
+                this.isCounterAttacking = true;
+                this.counterDamageBonus = 1.5; // 50% de dégâts en plus
+                
+                // Effet visuel spécial pour contre
+                // Particules d'impact supprimées
+                
+                return true;
+            }
+            
+            checkGuardBreak() {
+                this.currentBlockCount++;
+                console.log(`🛡️ ${this.type}: Block count: ${this.currentBlockCount}/${this.guardBreakThreshold}`);
+                
+                if (this.currentBlockCount >= this.guardBreakThreshold) {
+                    this.isGuardBroken = true;
+                    this.guardBreakTimer = this.guardBreakDuration;
+                    this.isBlocking = false;
+                    this.currentBlockCount = 0;
+                    
+                    console.log(`💥 ${this.type}: GUARD BROKEN! Vulnerable for ${this.guardBreakDuration}ms`);
+                    
+                    // Effet visuel de garde cassée
+                    // Particules d'impact supprimées
+                    startScreenShake(500, 8);
+                    
+                    return true;
+                }
+                return false;
+            }
+            
+            startAirAttack() {
+                if (!this.onGround && this.canAirAttack && !this.isAirAttacking) {
+                    this.isAirAttacking = true;
+                    this.airAttackTimer = this.airAttackDuration;
+                    this.animationState = 'attack';
+                    this.animationFrame = 1;
+                    
+                    console.log(`🦅 ${this.type}: AIR ATTACK! Combo: ${this.airComboCount}/${this.maxAirCombo}`);
+                    
+                    // Particules d'attaque aérienne
+                    // Particules d'étincelles supprimées
+                    return true;
+                }
+                return false;
+            }
+            
+            startPerfectDodge(direction) {
+                // Démarrer le dash avec perfect dodge
+                this.startDash(direction);
+                
+                // Activer l'invincibilité immédiatement
+                this.perfectDodgeInvincible = true;
+                
+                console.log(`👻 ${this.type}: PERFECT DODGE! Invincible pendant le dash!`);
+                
+                // Effet visuel d'esquive parfaite
+                // Particules de poussière supprimées
+                return true;
+            }
+
+            // ========== MÉTHODES DE COMBAT AVANCÉ ==========
+            
+            triggerGuardBreak() {
+                this.isGuardBroken = true;
+                this.guardBreakTimer = this.guardBreakDuration;
+                this.guardPressure = 0; // Reset la pression
+                this.stopBlocking(); // Arrêter la garde
+                
+                // Effet visuel de garde cassée
+                // Particules d'impact supprimées
+                
+                console.log(`💔 ${this.type}: GUARD BREAK! Vulnérable pendant ${this.guardBreakDuration}ms`);
+            }
+
+            checkGuardBreak() {
+                return this.guardPressure >= this.guardBreakThreshold;
+            }
+
+            // 🤖 IA SIMPLE POUR TESTS
+            simpleAI(deltaTime) {
+                const opponent = players[0]; // Player 1
+                const distance = Math.abs(this.x - opponent.x);
+                
+                // Timer global d'IA
+                aiTimer += deltaTime;
+                
+                if (!this.isAttacking && !this.isHurt && !this.isDown && !this.isGettingUp) {
+                    // Se rapprocher si trop loin
+                    if (distance > 80) {
+                        if (opponent.x < this.x) {
+                            this.vx = -this.speed * 0.8;
+                            this.facingLeft = true;
+                        } else {
+                            this.vx = this.speed * 0.8;
+                            this.facingLeft = false;
+                        }
+                    }
+                    // Attaquer si à portée et pas d'attaque récente
+                    else if (distance < 70 && aiTimer > 1500) {
+                        aiTimer = 0; // Reset timer
+                        
+                        // Choisir une attaque aléatoire
+                        const attackChoice = Math.random();
+                        if (attackChoice < 0.6) {
+                            // Attaque normale (60%)
+                            this.handleComboAttack();
+                            console.log("🤖 IA: Attaque normale");
+                        } else if (attackChoice < 0.8) {
+                            // Uppercut (20%)
+                            this.comboType = 'uppercut';
+                            this.handleComboAttack();
+                            console.log("🤖 IA: Uppercut");
+                        } else {
+                            // Low attack (20%)
+                            this.comboType = 'low';
+                            this.handleComboAttack();
+                            console.log("🤖 IA: Low attack");
+                        }
+                    }
+                    // Bloquer si l'adversaire attaque
+                    else if (opponent.isAttacking && distance < 80 && Math.random() < 0.7) {
+                        const guardDirection = this.facingLeft ? -1 : 1;
+                        this.startBlocking(guardDirection);
+                        console.log("🤖 IA: Garde!");
+                    }
+                }
+            }
+
+            // ========== MÉTHODES DE GÉNÉRATION DE PARTICULES ==========
+            
+            // Méthodes de création de particules supprimées
+
+            // Méthode de création de particules supprimée
         }
 
         // ========== FONCTIONS UTILITAIRES POUR LA GESTION DES SPRITES ==========
@@ -2080,14 +3122,15 @@
 
         function init() {
             players = [
-                new FixedPlayer(200, 620, 'Ninja Blue', true),
-                new FixedPlayer(900, 620, 'Ninja Red', false)
+                new FixedPlayer(200, 620, 'Warrior', true),     // 🗡️ WARRIOR À GAUCHE !
+                new FixedPlayer(900, 620, 'Ninja Red', false)   // 🥷 NINJA À DROITE !
             ];
             
             // 🥊 Initialiser le système de rounds
             roundSystem.roundStartTime = Date.now();
             console.log(`🥊 DÉBUT DU ROUND ${roundSystem.currentRound}`);
             console.log(`📊 Premier à 3 victoires remporte le match !`);
+            console.log(`⚔️ WARRIOR vs NINJA - COMBAT CLASSIQUE 1v1 !`);
             
             requestAnimationFrame(gameLoop);
         }
@@ -2109,17 +3152,39 @@
         }
 
         function update(deltaTime) {
-            for (const player of players) {
-                player.update(deltaTime);
+            // 🎮 GESTION DES STATES DU JEU
+            if (gameState === 'characterSelect') {
+                updateCharacterSelect(deltaTime);
+                return;
             }
             
+            // 🥊 GESTION DU FREEZE FRAME (doit être en premier)
+            const freezeMultiplier = updateFreezeFrame(deltaTime);
+            const effectiveDelta = deltaTime * timeScale * freezeMultiplier;
+            
+            // 🎬 MISE À JOUR DE LA CAMÉRA DYNAMIQUE
+            updateSpecialCamera();
+            
+            // Si on est en freeze frame, on arrête les updates
+            if (freezeMultiplier === 0.0) {
+                console.log(`🥊 FREEZE ACTIF - Pas d'update`);
+                return; // Tout s'arrête pendant le freeze !
+            }
+            
+            for (const player of players) {
+                player.update(effectiveDelta);
+            }
+            
+            // 💥 MISE À JOUR DES PARTICULES STYLE TEKKEN
+            particles = particles.filter(particle => particle.update(effectiveDelta));
+            
             // 🥊 GESTION DU SYSTÈME DE ROUNDS
-            updateRoundSystem(deltaTime);
+            updateRoundSystem(effectiveDelta);
             
             // Mettre à jour les effets d'impact
             for (let i = impactEffects.length - 1; i >= 0; i--) {
                 const effect = impactEffects[i];
-                if (!effect.update(deltaTime / 1000)) {
+                if (!effect.update(effectiveDelta / 1000)) {
                     impactEffects.splice(i, 1);
                 }
             }
@@ -2129,7 +3194,7 @@
             
             // Mettre à jour le screen shake
             if (screenShake.duration > 0) {
-                screenShake.duration -= deltaTime;
+                screenShake.duration -= effectiveDelta;
                 screenShake.x = (Math.random() - 0.5) * screenShake.intensity;
                 screenShake.y = (Math.random() - 0.5) * screenShake.intensity;
                 
@@ -2189,7 +3254,7 @@
             if (distance < 60) { // Réduit de 100 à 60 pixels pour une portée plus réaliste
                 if (p1.isAttacking && !p1.hasHit && p1.animationFrame >= 2) {
                     // Vérifier que p1 attaque dans la bonne direction ET à bonne portée
-                    const attackRange = 50; // Portée d'attaque en pixels
+                    const attackRange = p1.isAirAttacking ? 70 : 50; // Plus de portée en l'air
                     let canHit = false;
                     
                     if (p1.facingLeft && p2.x < p1.x) {
@@ -2203,6 +3268,19 @@
                     if (canHit) {
                         let damage = calculateComboDamage(p1);
                         let knockback = calculateComboKnockback(p1);
+                        
+                        // Bonus de dégâts pour contre-attaque
+                        if (p1.isCounterAttacking) {
+                            damage = Math.floor(damage * 1.5); // 50% de bonus
+                            knockback = Math.floor(knockback * 1.3);
+                            console.log(`💥 CONTRE-ATTAQUE ! Dégâts: ${damage} (+50%)`);
+                        }
+                        
+                        // Bonus pour attaque aérienne
+                        if (p1.isAirAttacking) {
+                            damage = Math.floor(damage * 1.2); // 20% de bonus
+                            console.log(`✈️ ATTAQUE AÉRIENNE ! Dégâts: ${damage} (+20%)`);
+                        }
                         
                         // Calcul du point d'impact précis (style Tekken)
                         const impactX = p2.x + p2.width/2; // Centre du receveur
@@ -2224,34 +3302,74 @@
                         }
                         
                         // Appliquer les dégâts APRÈS les effets spéciaux
-                        const wasBlocked = p2.takeDamage(damage, p1.x, p1.comboType);
+                        const damageResult = p2.takeDamage(damage, p1.x, p1.comboType, p1);
                         
-                        if (!wasBlocked) {
+                        // Réactions selon le résultat de l'attaque
+                        if (damageResult === "perfect_parry") {
+                            // Perfect parry réussi - l'attaquant est stunné
+                            p1.blockStun = 30;
+                            p1.isCounterAttacking = false;
+                            console.log(`🛡️ ${p2.type} : Perfect Parry sur ${p1.type}!`);
+                            screenShake = { x: 0, y: 0, intensity: 4, duration: 200 };
+                            return; // Pas de dégâts
+                        } else if (damageResult === "perfect_dodge") {
+                            // Perfect dodge - aucun effet
+                            console.log(`💨 ${p2.type} : Perfect Dodge!`);
+                            return;
+                        } else if (damageResult === "guard_break") {
+                            // Garde cassée - effet spécial
+                            impactEffects.push(new ImpactEffect(impactX, impactY, 'guard_break', 600));
+                            screenShake = { x: 0, y: 0, intensity: 10, duration: 400 };
+                        } else if (damageResult === "blocked") {
+                            // Attaque bloquée normalement
+                            impactEffects.push(new ImpactEffect(impactX, impactY, 'block', 300));
+                            screenShake = { x: 0, y: 0, intensity: 3, duration: 150 };
+                            // Pas de knockback sur block
+                            return;
+                        }
+                        
+                        // Attaque réussie (hit, counter, etc.)
+                        if (damageResult === "hit" || damageResult === "guard_break") {
                             p1.hasHit = true;
+                            p1.isCounterAttacking = false; // Reset counter après usage
                             
-                            // Effets selon le type de combo
-                            if (p1.comboType === 'uppercut') {
-                                p2.vy = -400; // Projette vers le haut
-                                p2.vx = (p2.x > p1.x ? 120 : -120);
-                                impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
-                                screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
-                            } else if (p1.comboType === 'double') {
-                                p2.vx = (p2.x > p1.x ? knockback * 1.2 : -knockback * 1.2);
-                                impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
-                                setTimeout(() => {
-                                    impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
-                                }, 150);
-                                screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
-                                setTimeout(() => {
+                            // Gestion spéciale des attaques aériennes
+                            if (p1.isAirAttacking) {
+                                // Air attack spike - envoie vers le bas
+                                p2.vy = 300; // Force vers le bas
+                                p2.vx = (p2.x > p1.x ? knockback * 0.8 : -knockback * 0.8);
+                                p1.airComboCount++;
+                                impactEffects.push(new ImpactEffect(impactX, impactY, 'air_spike', 400));
+                                console.log(`✈️ Air Attack! Combo: ${p1.airComboCount}`);
+                            } else {
+                                // Effets selon le type de combo terrestre
+                                if (p1.comboType === 'uppercut') {
+                                    p2.vy = -400; // Projette vers le haut
+                                    p2.vx = (p2.x > p1.x ? 120 : -120);
+                                    impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
                                     screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
-                                }, 150);
-                            } else if (p1.comboType !== 'low') { // Low attack déjà géré
-                                p2.vx = (p2.x > p1.x ? knockback : -knockback);
-                                impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
-                                screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
+                                } else if (p1.comboType === 'double') {
+                                    p2.vx = (p2.x > p1.x ? knockback * 1.2 : -knockback * 1.2);
+                                    impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
+                                    setTimeout(() => {
+                                        impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
+                                    }, 150);
+                                    screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
+                                    setTimeout(() => {
+                                        screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
+                                    }, 150);
+                                } else if (p1.comboType !== 'low') { // Low attack déjà géré
+                                    p2.vx = (p2.x > p1.x ? knockback : -knockback);
+                                    impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
+                                    screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
+                                }
                             }
+                            
+                            // Vérifier wall bounce après knockback
+                            checkWallBounce(p2);
+                            
                         } else {
-                            // Effet de garde réussie
+                            // Effet de garde réussie (ne devrait plus arriver avec la nouvelle logique)
                             impactEffects.push(new ImpactEffect(impactX, impactY, 'blocked', 300));
                             screenShake = { x: 0, y: 0, intensity: 3, duration: 150 };
                         }
@@ -2262,7 +3380,7 @@
                 }
                 if (p2.isAttacking && !p2.hasHit && p2.animationFrame >= 2) {
                     // Vérifier que p2 attaque dans la bonne direction ET à bonne portée
-                    const attackRange = 50; // Portée d'attaque en pixels
+                    const attackRange = p2.isAirAttacking ? 70 : 50; // Plus de portée en l'air
                     let canHit = false;
                     
                     if (p2.facingLeft && p1.x < p2.x) {
@@ -2276,6 +3394,19 @@
                     if (canHit) {
                         let damage = calculateComboDamage(p2);
                         let knockback = calculateComboKnockback(p2);
+                        
+                        // Bonus de dégâts pour contre-attaque
+                        if (p2.isCounterAttacking) {
+                            damage = Math.floor(damage * 1.5); // 50% de bonus
+                            knockback = Math.floor(knockback * 1.3);
+                            console.log(`💥 CONTRE-ATTAQUE ! Dégâts: ${damage} (+50%)`);
+                        }
+                        
+                        // Bonus pour attaque aérienne
+                        if (p2.isAirAttacking) {
+                            damage = Math.floor(damage * 1.2); // 20% de bonus
+                            console.log(`✈️ ATTAQUE AÉRIENNE ! Dégâts: ${damage} (+20%)`);
+                        }
                         
                         // Calcul du point d'impact précis (style Tekken)
                         const impactX = p1.x + p1.width/2; // Centre du receveur
@@ -2297,34 +3428,74 @@
                         }
                         
                         // Appliquer les dégâts APRÈS les effets spéciaux
-                        const wasBlocked = p1.takeDamage(damage, p2.x, p2.comboType);
+                        const damageResult = p1.takeDamage(damage, p2.x, p2.comboType, p2);
                         
-                        if (!wasBlocked) {
+                        // Réactions selon le résultat de l'attaque
+                        if (damageResult === "perfect_parry") {
+                            // Perfect parry réussi - l'attaquant est stunné
+                            p2.blockStun = 30;
+                            p2.isCounterAttacking = false;
+                            console.log(`🛡️ ${p1.type} : Perfect Parry sur ${p2.type}!`);
+                            screenShake = { x: 0, y: 0, intensity: 4, duration: 200 };
+                            return; // Pas de dégâts
+                        } else if (damageResult === "perfect_dodge") {
+                            // Perfect dodge - aucun effet
+                            console.log(`💨 ${p1.type} : Perfect Dodge!`);
+                            return;
+                        } else if (damageResult === "guard_break") {
+                            // Garde cassée - effet spécial
+                            impactEffects.push(new ImpactEffect(impactX, impactY, 'guard_break', 600));
+                            screenShake = { x: 0, y: 0, intensity: 10, duration: 400 };
+                        } else if (damageResult === "blocked") {
+                            // Attaque bloquée normalement
+                            impactEffects.push(new ImpactEffect(impactX, impactY, 'block', 300));
+                            screenShake = { x: 0, y: 0, intensity: 3, duration: 150 };
+                            // Pas de knockback sur block
+                            return;
+                        }
+                        
+                        // Attaque réussie (hit, counter, etc.)
+                        if (damageResult === "hit" || damageResult === "guard_break") {
                             p2.hasHit = true;
+                            p2.isCounterAttacking = false; // Reset counter après usage
                             
-                            // Effets selon le type de combo
-                            if (p2.comboType === 'uppercut') {
-                                p1.vy = -400; // Projette vers le haut
-                                p1.vx = (p1.x > p2.x ? 120 : -120);
-                                impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
-                                screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
-                            } else if (p2.comboType === 'double') {
-                                p1.vx = (p1.x > p2.x ? knockback * 1.2 : -knockback * 1.2);
-                                impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
-                                setTimeout(() => {
-                                    impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
-                                }, 150);
-                                screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
-                                setTimeout(() => {
+                            // Gestion spéciale des attaques aériennes
+                            if (p2.isAirAttacking) {
+                                // Air attack spike - envoie vers le bas
+                                p1.vy = 300; // Force vers le bas
+                                p1.vx = (p1.x > p2.x ? knockback * 0.8 : -knockback * 0.8);
+                                p2.airComboCount++;
+                                impactEffects.push(new ImpactEffect(impactX, impactY, 'air_spike', 400));
+                                console.log(`✈️ Air Attack! Combo: ${p2.airComboCount}`);
+                            } else {
+                                // Effets selon le type de combo terrestre
+                                if (p2.comboType === 'uppercut') {
+                                    p1.vy = -400; // Projette vers le haut
+                                    p1.vx = (p1.x > p2.x ? 120 : -120);
+                                    impactEffects.push(new ImpactEffect(impactX, impactY, 'critical', 500));
                                     screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
-                                }, 150);
-                            } else if (p2.comboType !== 'low') { // Low attack déjà géré
-                                p1.vx = (p1.x > p2.x ? knockback : -knockback);
-                                impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
-                                screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
+                                } else if (p2.comboType === 'double') {
+                                    p1.vx = (p1.x > p2.x ? knockback * 1.2 : -knockback * 1.2);
+                                    impactEffects.push(new ImpactEffect(impactX - 10, impactY, 'critical', 400));
+                                    setTimeout(() => {
+                                        impactEffects.push(new ImpactEffect(impactX + 10, impactY + 15, 'critical', 400));
+                                    }, 150);
+                                    screenShake = { x: 0, y: 0, intensity: 6, duration: 200 };
+                                    setTimeout(() => {
+                                        screenShake = { x: 0, y: 0, intensity: 8, duration: 300 };
+                                    }, 150);
+                                } else if (p2.comboType !== 'low') { // Low attack déjà géré
+                                    p1.vx = (p1.x > p2.x ? knockback : -knockback);
+                                    impactEffects.push(new ImpactEffect(impactX, impactY + 10, 'hit', 350));
+                                    screenShake = { x: 0, y: 0, intensity: 4, duration: 150 };
+                                }
                             }
+                            
+                            // Vérifier wall bounce après knockback
+                            checkWallBounce(p1);
+                            
                         } else {
-                            // Effet de garde réussie
+                            // Effet de garde réussie (ne devrait plus arriver avec la nouvelle logique)
                             impactEffects.push(new ImpactEffect(impactX, impactY, 'blocked', 300));
                             screenShake = { x: 0, y: 0, intensity: 3, duration: 150 };
                         }
@@ -2487,11 +3658,13 @@
             if (players[0] && !players[0].isInVictoryPose && !players[0].isInDefeatPose) {
                 players[0].isAttacking = false;
                 players[0].isGatling = false;
+                players[0].isCombo = false;
                 players[0].isBlocking = false;
             }
             if (players[1] && !players[1].isInVictoryPose && !players[1].isInDefeatPose) {
                 players[1].isAttacking = false;
                 players[1].isGatling = false;
+                players[1].isCombo = false;
                 players[1].isBlocking = false;
             }
         }
@@ -2521,6 +3694,7 @@
                 players[0].animationFrame = 1;
                 players[0].isAttacking = false;
                 players[0].isGatling = false;
+                players[0].isCombo = false;
                 players[0].isBlocking = false;
                 players[0].isHurt = false;
                 players[0].isDown = false;
@@ -2540,6 +3714,7 @@
                 players[1].animationFrame = 1;
                 players[1].isAttacking = false;
                 players[1].isGatling = false;
+                players[1].isCombo = false;
                 players[1].isBlocking = false;
                 players[1].isHurt = false;
                 players[1].isDown = false;
@@ -2922,7 +4097,13 @@
             // Joueur 2 (droite)
             ctx.fillStyle = '#FFFFFF';
             ctx.textAlign = 'right';
-            ctx.fillText(`JOUEUR 2`, panelX + panelWidth - 20, panelY + 50);
+            ctx.fillText(`JOUEUR 2${aiEnabled ? ' 🤖' : ''}`, panelX + panelWidth - 20, panelY + 50);
+            if (aiEnabled) {
+                ctx.fillStyle = '#00FFFF';
+                ctx.font = '12px Arial';
+                ctx.fillText(`IA ACTIVE`, panelX + panelWidth - 20, panelY + 35);
+                ctx.font = '16px Arial';
+            }
             ctx.fillStyle = roundSystem.p2Wins >= 3 ? '#00FF00' : '#FFD700';
             ctx.fillText(`${roundSystem.p2Wins} Victoires`, panelX + panelWidth - 20, panelY + 70);
             
@@ -2985,16 +4166,41 @@
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Appliquer le screen shake
-            ctx.save();
-            if (screenShake.duration > 0) {
-                ctx.translate(screenShake.x, screenShake.y);
+            // � RENDU SELON L'ÉTAT DU JEU
+            if (gameState === 'characterSelect') {
+                renderCharacterSelect();
+                return;
             }
             
+            // �🎬 APPLIQUER LES TRANSFORMATIONS DE CAMÉRA DYNAMIQUE
+            ctx.save();
+            
+            // Calculer le centre de la caméra (suivre le joueur en attaque spéciale)
+            let centerX = canvas.width / 2 + camera.x;
+            let centerY = canvas.height / 2 + camera.y;
+            
+            // Appliquer le zoom
+            const scale = camera.scale;
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(scale, scale);
+            ctx.translate(-centerX, -centerY);
+            
+            // Appliquer le screen shake (ancien système + nouveau)
+            let shakeX = camera.shakeX;
+            let shakeY = camera.shakeY;
+            
+            if (screenShake.duration > 0) {
+                shakeX += screenShake.x;
+                shakeY += screenShake.y;
+            }
+            
+            ctx.translate(shakeX, shakeY);
+            
+            // Effet visual du slow motion
             if (timeScale < 1.0) {
                 ctx.save();
-                ctx.fillStyle = 'rgba(0, 100, 200, 0.15)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.1)'; // Teinte dorée pour l'effet spécial
+                ctx.fillRect(-shakeX - centerX, -shakeY - centerY, canvas.width * 2, canvas.height * 2);
                 ctx.restore();
             }
             
@@ -3009,10 +4215,15 @@
                 player.render(ctx);
             }
             
-            // Rendre les effets d'impact par-dessus tout
+            // Rendre les effets d'impact d'abord
             for (const effect of impactEffects) {
                 effect.render(ctx);
             }
+            
+            // 💥 RENDU DES PARTICULES STYLE TEKKEN PAR-DESSUS
+            particles.forEach(particle => {
+                particle.render(ctx);
+            });
             
             if (timeScale < 1.0) {
                 ctx.save();
@@ -3028,6 +4239,9 @@
             
             // 🥊 AFFICHAGE DU SYSTÈME DE ROUNDS
             renderRoundSystem(ctx);
+            
+            // 🥊 EFFETS DE FREEZE FRAME (flash blanc)
+            renderFreezeEffects(ctx);
             
             // INSTRUCTIONS SIMPLES (en bas de l'écran)
             ctx.save();
@@ -3045,6 +4259,15 @@
         window.addEventListener('keydown', (e) => {
             keys[e.code] = true;
             
+            // 🎵 Initialiser l'audio au premier input
+            initAudio();
+            
+            // 🎮 CONTRÔLES ÉCRAN DE SÉLECTION
+            if (gameState === 'characterSelect') {
+                handleCharacterSelectInput(e.code);
+                return;
+            }
+            
             if (e.code === 'KeyC') { // Technique spéciale sur C
                 e.preventDefault();
                 if (players[0]) players[0].chargeSpecialAttack();
@@ -3053,6 +4276,13 @@
             if (e.shiftKey && e.code === 'KeyL') {
                 e.preventDefault();
                 if (players[1]) players[1].chargeSpecialAttack();
+            }
+            
+            // 🤖 Activer/désactiver l'IA avec la touche F1
+            if (e.code === 'F1') {
+                e.preventDefault();
+                aiEnabled = !aiEnabled;
+                console.log(`🤖 IA ${aiEnabled ? 'ACTIVÉE' : 'DÉSACTIVÉE'} ! (Player 2 = ${aiEnabled ? 'IA' : 'Manuel'})`);
             }
 
             
@@ -3072,6 +4302,197 @@
         window.addEventListener('keyup', (e) => {
             keys[e.code] = false;
         });
+        
+        // 🥊 FONCTIONS ÉCRAN DE SÉLECTION DE PERSONNAGES
+        
+        function updateCharacterSelect(deltaTime) {
+            // Animation des sprites idle
+            characterSelect.animationTimer += deltaTime;
+            if (characterSelect.animationTimer >= 300) { // 300ms par frame
+                characterSelect.animationTimer = 0;
+                // Les frames idle vont de 1 à 4, on boucle
+            }
+        }
+        
+        function renderCharacterSelect() {
+            // � FOND TRÈS SOMBRE - STYLE MODERNE
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#0a0a0a');
+            gradient.addColorStop(0.5, '#1a1a1a');
+            gradient.addColorStop(1, '#0a0a0a');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // ✨ OVERLAY SUBTIL
+            ctx.fillStyle = 'rgba(0, 20, 40, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 🏆 TITRE STYLÉ
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 56px Arial';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = '#FF6600';
+            ctx.shadowBlur = 10;
+            ctx.fillText('SELECT FIGHTER', canvas.width / 2, 100);
+            ctx.shadowBlur = 0;
+            
+            // 🎮 ZONES JOUEURS RÉDUITES ET ÉPURÉES - 2 PERSONNAGES
+            renderPlayerSelection(1, 400, 250); // P1 à gauche
+            renderPlayerSelection(2, 800, 250); // P2 à droite
+            
+            // ⚔️ VS STYLÉ AU CENTRE
+            ctx.fillStyle = '#FF3333';
+            ctx.font = 'bold 72px Arial';
+            ctx.shadowColor = '#990000';
+            ctx.shadowBlur = 15;
+            ctx.fillText('VS', canvas.width / 2, 400);
+            ctx.shadowBlur = 0;
+            
+            // 📋 INSTRUCTIONS MINIMALISTES
+            ctx.fillStyle = '#888888';
+            ctx.font = '20px Arial';
+            ctx.fillText('A/D & ←/→ • B & N to confirm • ENTER to fight', canvas.width / 2, canvas.height - 40);
+        }
+        
+        function renderPlayerSelection(playerNum, x, y) {
+            const selection = playerNum === 1 ? characterSelect.player1Selection : characterSelect.player2Selection;
+            const confirmed = playerNum === 1 ? characterSelect.player1Confirmed : characterSelect.player2Confirmed;
+            const character = characterSelect.characters[selection];
+            
+            // 🖼️ CADRE ÉLÉGANT ET PLUS GRAND
+            const frameSize = 180;
+            ctx.strokeStyle = confirmed ? '#00FF88' : (playerNum === 1 ? '#3388FF' : '#FF8833');
+            ctx.lineWidth = confirmed ? 6 : 3;
+            ctx.strokeRect(x - frameSize/2, y - 30, frameSize, frameSize + 80);
+            
+            // 🌟 GLOW EFFECT POUR CONFIRMÉ
+            if (confirmed) {
+                ctx.shadowColor = ctx.strokeStyle;
+                ctx.shadowBlur = 20;
+                ctx.strokeRect(x - frameSize/2, y - 30, frameSize, frameSize + 80);
+                ctx.shadowBlur = 0;
+            }
+            
+            // 👤 SPRITE IDLE ANIMÉ - PLUS GRAND !
+            const currentFrame = Math.floor(characterSelect.animationTimer / 400) % 4 + 1;
+            const characterKey = character.type.toLowerCase().replace(' ', '');
+            const spritePath = `assets/characters/${characterKey}/basic/${characterKey}_idle${currentFrame}.png`;
+            
+            // 🔍 DEBUG SIMPLE
+            if (playerNum === 1 && currentFrame === 1) { // Debug seulement pour P1 frame 1
+                console.log(`🎯 Trying: ${spritePath}`);
+                console.log(`🎯 Available:`, Object.keys(sprites).filter(k => k.includes('ninja_idle')).slice(0, 3));
+            }
+            
+            // Chercher le sprite sans timestamp
+            let sprite = sprites[spritePath];
+            
+            // 🧪 TEST: Si pas trouvé, essayer un sprite ninja simple
+            if (!sprite && characterKey === 'ninja') {
+                sprite = sprites['ninja_idle1.png'];
+                console.log(`🧪 FALLBACK ninja_idle1.png: ${!!sprite}`);
+            }
+            
+            // 🧪 TEST: Si pas trouvé, essayer un sprite warrior simple
+            if (!sprite && characterKey === 'warrior') {
+                sprite = sprites['warrior_idle1.png'];
+                console.log(`🧪 FALLBACK warrior_idle1.png: ${!!sprite}`);
+            }
+            
+            if (sprite) {
+                // Sprite beaucoup plus grand et centré
+                const spriteSize = 140;
+                ctx.drawImage(sprite, x - spriteSize/2, y + 10, spriteSize, spriteSize);
+            } else {
+                // Fallback rectangle stylé
+                ctx.fillStyle = playerNum === 1 ? '#3388FF' : '#FF8833';
+                ctx.fillRect(x - 70, y + 10, 140, 140);
+                
+                // Texte fallback avec le nom exact cherché
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(characterKey, x, y + 75);
+                ctx.fillText(`idle${currentFrame}`, x, y + 95);
+            }
+            
+            // 📛 NOM STYLÉ
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = '#000000';
+            ctx.shadowBlur = 3;
+            ctx.fillText(character.name, x, y + 180);
+            ctx.shadowBlur = 0;
+            
+            // 🏷️ LABEL JOUEUR DISCRET
+            ctx.fillStyle = playerNum === 1 ? '#3388FF' : '#FF8833';
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText(`P${playerNum}`, x, y - 50);
+            
+            // ✅ INDICATEUR CONFIRMÉ
+            if (confirmed) {
+                ctx.fillStyle = '#00FF88';
+                ctx.font = 'bold 20px Arial';
+                ctx.fillText('✓ READY', x, y + 210);
+            }
+        }
+        
+        function handleCharacterSelectInput(keyCode) {
+            switch(keyCode) {
+                case 'KeyA': // P1 gauche
+                    if (!characterSelect.player1Confirmed) {
+                        characterSelect.player1Selection = (characterSelect.player1Selection - 1 + characterSelect.characters.length) % characterSelect.characters.length;
+                    }
+                    break;
+                case 'KeyD': // P1 droite
+                    if (!characterSelect.player1Confirmed) {
+                        characterSelect.player1Selection = (characterSelect.player1Selection + 1) % characterSelect.characters.length;
+                    }
+                    break;
+                case 'KeyB': // P1 confirmer
+                    characterSelect.player1Confirmed = !characterSelect.player1Confirmed;
+                    break;
+                case 'ArrowLeft': // P2 gauche
+                    if (!characterSelect.player2Confirmed) {
+                        characterSelect.player2Selection = (characterSelect.player2Selection - 1 + characterSelect.characters.length) % characterSelect.characters.length;
+                    }
+                    break;
+                case 'ArrowRight': // P2 droite
+                    if (!characterSelect.player2Confirmed) {
+                        characterSelect.player2Selection = (characterSelect.player2Selection + 1) % characterSelect.characters.length;
+                    }
+                    break;
+                case 'KeyN': // P2 confirmer
+                    characterSelect.player2Confirmed = !characterSelect.player2Confirmed;
+                    break;
+                case 'Enter': // Démarrer combat si les deux ont confirmé
+                    if (characterSelect.player1Confirmed && characterSelect.player2Confirmed) {
+                        // Démarrer le combat !
+                        startFight();
+                    }
+                    break;
+            }
+        }
+        
+        function startFight() {
+            // 🥊 TRANSITION VERS LE COMBAT
+            const p1Character = characterSelect.characters[characterSelect.player1Selection];
+            const p2Character = characterSelect.characters[characterSelect.player2Selection];
+            
+            // Créer les joueurs avec les personnages sélectionnés
+            players = [
+                new FixedPlayer(200, 620, p1Character.type, true),
+                new FixedPlayer(900, 620, p2Character.type, false)
+            ];
+            
+            // Passer en mode combat
+            gameState = 'fighting';
+            
+            // Initialiser le système de rounds
+            roundSystem.roundStartTime = Date.now();
+            console.log(`🥊 COMBAT: ${p1Character.name} vs ${p2Character.name}`);
+        }
 
         // Démarrer le préchargement
         window.addEventListener('load', preloadSprites);

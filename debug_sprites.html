@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Debug Sprites</title>
+    <style>
+        body { margin: 0; padding: 20px; background: #000; color: white; font-family: Arial; }
+        .sprite-test { margin: 10px; padding: 10px; border: 1px solid #333; }
+        img { border: 2px solid #666; margin: 5px; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>TEST DEBUG SPRITES</h1>
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        // Tester différents chemins possibles
+        const testPaths = [
+            'assets/characters/skills/ninja_special1.png',
+            'assets/characters/skills/ninja_special2.png',
+            'assets/characters/skills/ninja_special3.png',
+            'assets/characters/skills/ninja_special4.png',
+            'assets/characters/skills/ninja_special5.png',
+            'assets/characters/skills/ninja_special6.png',
+            'assets/characters/ninja/ninja_special1.png',
+            'assets/characters/ninja/ninja_idle.png',
+            'skills/ninja_special1.png'
+        ];
+        
+        testPaths.forEach((path, index) => {
+            const div = document.createElement('div');
+            div.className = 'sprite-test';
+            div.innerHTML = `<strong>Test ${index + 1}:</strong> ${path} - <span id="status${index}">Chargement...</span>`;
+            results.appendChild(div);
+            
+            const img = new Image();
+            img.onload = () => {
+                document.getElementById(`status${index}`).innerHTML = '<span class="success">✅ TROUVÉ !</span>';
+                div.appendChild(img);
+                img.style.width = '100px';
+                img.style.height = '100px';
+                console.log(`✅ SPRITE TROUVÉ: ${path}`);
+            };
+            img.onerror = () => {
+                document.getElementById(`status${index}`).innerHTML = '<span class="error">❌ Introuvable</span>';
+                console.log(`❌ SPRITE MANQUANT: ${path}`);
+            };
+            img.src = path;
+        });
+    </script>
+</body>
+</html>

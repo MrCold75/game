@@ -117,7 +117,13 @@
             shakeIntensity: 0,
             isSpecialCamera: false,
             specialProgress: 0,
-            targetPlayer: null
+            targetPlayer: null,
+            // Cinematic zoom (Tekken-style)
+            cinematicZoomEnabled: true,
+            minScale: 1.0,  // Maximum zoom out (initial camera)
+            maxScale: 1.6,  // Maximum zoom in when players are close
+            targetX: 0,
+            targetY: 0
         };
         
         // � SYSTÈME DE FREEZE FRAMES (HITSTOP)
@@ -312,25 +318,68 @@
         
         function endSpecialCamera() {
             camera.isSpecialCamera = false;
-            camera.targetScale = 1.0; // Retour au zoom normal
-            camera.scale = 1.0; // INSTANTANÉ : pas de transition progressive
             camera.shakeIntensity = 0;
             camera.shakeX = 0;
             camera.shakeY = 0;
             camera.targetPlayer = null; // Arrêter de suivre
             
-            // Retour instantané au centre
-            camera.x = 0;
-            camera.y = 0;
-            
             // Retour à la vitesse normale également instantané
             timeScale = 1.0;
             
-            console.log(`🎬 CAMÉRA SPÉCIALE terminée - DÉZOOM INSTANTANÉ!`);
+            // Don't reset scale/position - let cinematic zoom take over
+            console.log(`🎬 CAMÉRA SPÉCIALE terminée - Transition vers cinematic zoom!`);
         }
         
         function applyScreenShake(intensity) {
             camera.shakeIntensity = Math.max(camera.shakeIntensity, intensity);
+        }
+        
+        // 🎬 CINEMATIC ZOOM - TEKKEN STYLE
+        function updateCinematicZoom() {
+            // Skip if cinematic zoom is disabled or during special camera
+            if (!camera.cinematicZoomEnabled || camera.isSpecialCamera) return;
+            
+            // Need at least 2 players
+            if (players.length < 2) return;
+            
+            const player1 = players[0];
+            const player2 = players[1];
+            
+            // Calculate center point between players
+            const centerX = (player1.x + player1.width / 2 + player2.x + player2.width / 2) / 2;
+            const centerY = (player1.y + player1.height / 2 + player2.y + player2.height / 2) / 2;
+            
+            // Calculate distance between players
+            const dx = (player2.x + player2.width / 2) - (player1.x + player1.width / 2);
+            const dy = (player2.y + player2.height / 2) - (player1.y + player1.height / 2);
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Define distance thresholds (in pixels)
+            const minDistance = 150;  // Very close - maximum zoom in
+            const maxDistance = 600;  // Far apart - maximum zoom out (back to initial)
+            
+            // Calculate target scale based on distance (inverse relationship)
+            let targetScale;
+            if (distance <= minDistance) {
+                targetScale = camera.maxScale;
+            } else if (distance >= maxDistance) {
+                targetScale = camera.minScale;
+            } else {
+                // Linear interpolation between maxScale and minScale
+                const t = (distance - minDistance) / (maxDistance - minDistance);
+                targetScale = camera.maxScale - (camera.maxScale - camera.minScale) * t;
+            }
+            
+            // Update target values
+            camera.targetScale = targetScale;
+            camera.targetX = centerX - canvas.width / 2;
+            camera.targetY = centerY - canvas.height / 2;
+            
+            // Smooth interpolation towards target
+            const lerpSpeed = 0.05; // Adjust for smoother/faster transitions (lower = smoother)
+            camera.scale += (camera.targetScale - camera.scale) * lerpSpeed;
+            camera.x += (camera.targetX - camera.x) * lerpSpeed;
+            camera.y += (camera.targetY - camera.y) * lerpSpeed;
         }
         
         // 🥊 SYSTÈME DE FREEZE FRAMES POUR IMPACTS PUISSANTS
@@ -3164,6 +3213,9 @@
             
             // 🎬 MISE À JOUR DE LA CAMÉRA DYNAMIQUE
             updateSpecialCamera();
+            
+            // 🎬 MISE À JOUR DU CINEMATIC ZOOM (Tekken-style)
+            updateCinematicZoom();
             
             // Si on est en freeze frame, on arrête les updates
             if (freezeMultiplier === 0.0) {
